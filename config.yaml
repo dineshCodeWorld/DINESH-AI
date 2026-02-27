@@ -3,13 +3,13 @@
 
 # ==================== MODEL CONFIGURATION ====================
 model:
-  # Model Architecture (Reduced for GitHub Actions CPU training)
-  vocab_size: 5000             # Reduced from 50000 for faster training
-  d_model: 256                 # Reduced from 768 for faster training
-  num_layers: 4                # Reduced from 12 for faster training
-  num_heads: 4                 # Reduced from 12 for faster training
-  d_ff: 1024                   # Reduced from 3072 for faster training
-  max_length: 256              # Reduced from 512 for faster training
+  # Model Architecture (Optimized for GitHub Actions 6-hour limit)
+  vocab_size: 10000            # Balanced: not too small, fits in 6 hours
+  d_model: 512                 # Decent size for good quality
+  num_layers: 6                # Good depth for learning
+  num_heads: 8                 # Good attention coverage
+  d_ff: 2048                   # Good feed-forward capacity
+  max_length: 512              # Full context window
   dropout: 0.1                 # Dropout rate
   
   # Generation Parameters
@@ -20,12 +20,12 @@ model:
 
 # ==================== TRAINING CONFIGURATION ====================
 training:
-  # Hyperparameters (Optimized for GitHub Actions CPU)
-  batch_size: 4                # Reduced from 16 for faster training
-  learning_rate: 0.0001        # Increased from 0.00002 for faster convergence
+  # Hyperparameters (Optimized for GitHub Actions 6-hour limit)
+  batch_size: 8                # Balanced for speed and quality
+  learning_rate: 0.0001        # Good convergence rate
   weight_decay: 0.01           # L2 regularization
-  epochs: 2                    # Reduced from 3 for faster training
-  warmup_steps: 100            # Reduced from 1000 for faster training
+  epochs: 3                    # Full training
+  warmup_steps: 500            # Balanced warmup
   
   # Optimization
   optimizer: "adamw"           # Optimizer: adamw, adam, sgd
@@ -54,9 +54,9 @@ data:
   max_length: 2048             # Maximum document length (tokens)
   shuffle: true                # Shuffle data
   
-  # BPE Tokenizer (Reduced for faster training)
-  bpe_vocab_size: 5000         # Reduced from 50000 for faster training
-  bpe_min_frequency: 1         # Minimum frequency for BPE tokens (changed from 2 to include more tokens)
+  # BPE Tokenizer (Optimized for 6-hour training)
+  bpe_vocab_size: 10000        # Balanced vocabulary size
+  bpe_min_frequency: 1         # Include all tokens for better coverage
 
 # ==================== DATA SOURCES ====================
 data_sources:

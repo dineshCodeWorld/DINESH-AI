@@ -10,6 +10,7 @@ on:
 jobs:
   train:
     runs-on: ubuntu-latest
+    timeout-minutes: 360  # Full 6 hours allowed by GitHub Actions
     
     steps:
     - uses: actions/checkout@v3
