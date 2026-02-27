@@ -1,0 +1,214 @@
+# Dinesh AI Configuration File
+# Complete settings for model training, data collection, and deployment
+
+# ==================== MODEL CONFIGURATION ====================
+model:
+  # Model Architecture
+  vocab_size: 50000            # BPE tokenizer vocabulary size
+  d_model: 768                 # Hidden dimension size
+  num_layers: 12               # Number of transformer blocks
+  num_heads: 12                # Number of attention heads
+  d_ff: 3072                   # Feed-forward network dimension
+  max_length: 512              # Maximum sequence length
+  dropout: 0.1                 # Dropout rate
+  
+  # Generation Parameters
+  temperature: 0.7             # Sampling temperature (0.1-2.0)
+  top_k: 50                    # Top-k sampling
+  top_p: 0.9                   # Nucleus (top-p) sampling
+  max_new_tokens: 100          # Maximum tokens to generate
+
+# ==================== TRAINING CONFIGURATION ====================
+training:
+  # Hyperparameters
+  batch_size: 16               # Training batch size
+  learning_rate: 0.00002       # Initial learning rate
+  weight_decay: 0.01           # L2 regularization
+  epochs: 3                    # Number of training epochs
+  warmup_steps: 1000           # Learning rate warmup steps
+  
+  # Optimization
+  optimizer: "adamw"           # Optimizer: adamw, adam, sgd
+  scheduler: "cosine"          # LR scheduler: cosine, linear, constant
+  gradient_clip: 1.0           # Gradient clipping value
+  
+  # Device and precision
+  device: "cpu"                # Device: cuda, cpu (auto-detects GPU if available)
+  mixed_precision: false       # Enable mixed precision training (requires GPU)
+  
+  # Checkpointing
+  save_interval: 100           # Save checkpoint every N batches
+  eval_interval: 500           # Evaluate every N batches
+  keep_best_checkpoints: 3     # Keep best N checkpoints
+  early_stopping_patience: 5   # Epochs without improvement before stopping
+
+# ==================== DATA CONFIGURATION ====================
+data:
+  train_split: 0.8             # Training data split
+  val_split: 0.1               # Validation data split
+  test_split: 0.1              # Test data split
+  
+  # Data processing
+  max_samples: null            # Maximum samples (null = use all)
+  min_length: 50               # Minimum document length (tokens)
+  max_length: 2048             # Maximum document length (tokens)
+  shuffle: true                # Shuffle data
+  
+  # BPE Tokenizer
+  bpe_vocab_size: 50000        # BPE vocabulary size
+  bpe_min_frequency: 1         # Minimum frequency for BPE tokens (changed from 2 to include more tokens)
+
+# ==================== DATA SOURCES ====================
+data_sources:
+  # Wikipedia Configuration
+  wikipedia:
+    enabled: true
+    limit: 800                 # Reduced to make room for dialogue data
+    categories:
+      - Technology
+      - Science
+      - History
+      - Culture
+      - Business
+      - Health
+      - Philosophy              # Added: conversational reasoning
+      - Psychology              # Added: human behavior/communication
+  
+  # ArXiv Configuration
+  arxiv:
+    enabled: true
+    limit: 500                 # Number of papers to collect
+    sort_by: "submittedDate"   # Sort by: submittedDate, relevance
+    categories:
+      - cs.AI                  # Artificial Intelligence
+      - cs.LG                  # Machine Learning
+      - cs.NE                  # Neural and Evolutionary Computing
+      - stat.ML                # Statistics - Machine Learning
+      - cs.CL                  # Computation and Language
+  
+  # Project Gutenberg Configuration
+  gutenberg:
+    enabled: true
+    limit: 200                 # Increased: novels have dialogues
+    mirror: "https://www.gutenberg.org"  # Gutenberg mirror
+    # Note: Fiction books contain natural conversations and dialogues
+
+# ==================== CONTINUOUS LEARNING ====================
+continuous:
+  enabled: true                # Enable continuous learning
+  
+  # Collection Schedule
+  collection_interval_hours: 24         # Collect data every N hours
+  fine_tune_interval_hours: 72          # Fine-tune every N hours (3 days)
+  sample_size: 1000                     # New samples per collection
+  
+  # Data Management
+  retention_days: 30           # Keep data for N days
+  auto_cleanup: true           # Automatically delete old data
+  
+  # Weekly Versioning (Your Requirement!)
+  weekly_versioning: true      # Create new version every week
+  version_release_day: "sunday"         # Release day (sunday, monday, etc.)
+  version_release_time: "00:00"         # Release time (UTC)
+  
+  # Auto-Deployment
+  auto_deploy: true            # Automatically deploy improved models
+  deploy_on_improvement: true  # Deploy only if metrics improve
+  metric_threshold: 0.99       # Deploy if metric > threshold
+  
+  # Safety Checks
+  max_metric_drop_percent: 5   # Rollback if metrics drop >5%
+  max_errors_before_pause: 3   # Pause if 3 errors in a row
+  pause_duration_hours: 1      # Pause duration after error
+  
+  # Backup Strategy
+  backup_interval_hours: 24    # Backup every 24 hours
+  max_backups: 5               # Keep last 5 backups
+
+# ==================== DEPLOYMENT CONFIGURATION ====================
+deployment:
+  # Hugging Face Hub
+  push_to_hub: true            # Push trained models to Hugging Face
+  hf_repo_name: "dinesh-ai-custom-gpt"  # Repository name on HF
+  hf_private: false            # Make repository private
+  
+  # Versioning
+  version_format: "v{number}-{date}"    # v1-24-02-2026, v2-02-03-2026
+  archive_old_versions: true   # Archive old versions
+  
+  # Deployment Targets
+  targets:
+    hugging_face: true         # Deploy to Hugging Face Hub
+    local: true                # Keep local copy
+    oracle_cloud: false        # Deploy to Oracle Cloud (if configured)
+
+# ==================== LOGGING CONFIGURATION ====================
+logging:
+  level: "INFO"                # Log level: DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # File logging
+  log_file: "logs/training.log"
+  max_file_size: 10485760      # 10MB
+  backup_count: 5              # Keep 5 backup logs
+  
+  # Console logging
+  console_output: true         # Print to console
+  
+  # Specific loggers
+  tensorboard: false           # Enable TensorBoard logging
+  wandb: false                 # Enable Weights & Biases logging
+
+# ==================== PATHS CONFIGURATION ====================
+paths:
+  data_dir: "data"             # Data directory
+  raw_data_dir: "data/raw"     # Raw data directory
+  processed_data_dir: "data/processed"  # Processed data directory
+  
+  models_dir: "models"         # Models directory
+  models_versions_dir: "models/versions"  # Versioned models directory
+  
+  logs_dir: "logs"             # Logs directory
+  checkpoints_dir: "checkpoints"        # Checkpoints directory
+  
+  # Specific model files
+  tokenizer_file: "tokenizer.json"      # BPE tokenizer file
+  model_file: "model.pt"                # Model weights file
+  config_file: "model_config.json"      # Model config file
+
+# ==================== SYSTEM CONFIGURATION ====================
+system:
+  # Parallel Processing
+  num_workers: 4               # Number of data loading workers
+  pin_memory: true             # Pin memory for data loading
+  
+  # Random Seeds
+  seed: 42                     # Random seed for reproducibility
+  deterministic: true          # Use deterministic algorithms
+  
+  # Performance
+  use_compiled_model: false    # Use torch.compile for faster training
+  cache_data: true             # Cache processed data in memory
+
+# ==================== NOTES ====================
+# Configuration Priority (highest to lowest):
+# 1. Command line arguments
+# 2. Environment variables
+# 3. This config.yaml file
+# 4. Default values in code
+#
+# To override any setting from command line:
+#   python scripts/train.py --device cuda --batch_size 32
+#
+# To override from environment variables:
+#   export TRAINING_BATCH_SIZE=32
+#   export MODEL_D_MODEL=1024
+#   python scripts/train.py
+#
+# For weekly versioning with GitHub Actions:
+# - All versioning happens automatically
+# - New versions created every Sunday at 00:00 UTC
+# - Format: v1-24-02-2026, v2-02-03-2026, etc.
+# - Auto-deployed to Hugging Face Hub
+#
+# Last Updated: February 26, 2026

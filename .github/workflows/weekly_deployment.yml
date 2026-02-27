@@ -1,0 +1,63 @@
+name: Weekly Deployment
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Download latest model
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        HF_REPO: ${{ secrets.HF_REPO }}
+      run: |
+        python scripts/download_from_hf.py $HF_REPO
+    
+    - name: Create version backup
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        HF_REPO: ${{ secrets.HF_REPO }}
+      run: |
+        python scripts/create_weekly_version.py
+    
+    - name: Deploy to Streamlit Cloud
+      env:
+        STREAMLIT_TOKEN: ${{ secrets.STREAMLIT_TOKEN }}
+      run: |
+        echo "Streamlit auto-deploys from GitHub"
+    
+    - name: Send email notification
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 587
+        username: ${{ secrets.EMAIL_USERNAME }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: "✅ Dinesh AI - Weekly Deployment Complete"
+        to: dineshganji372@gmail.com
+        from: ${{ secrets.EMAIL_USERNAME }}
+        body: |
+          Weekly deployment completed successfully!
+          
+          Date: ${{ github.event.repository.updated_at }}
+          Model: ${{ secrets.HF_REPO }}
+          App: https://dinesh-ai.streamlit.app
+          
+          Latest version has been deployed and is now live.
+          
+          View model: https://huggingface.co/${{ secrets.HF_REPO }}

@@ -1,0 +1,47 @@
+name: Continuous Training
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [main]
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Download previous model
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        HF_REPO: ${{ secrets.HF_REPO }}
+      run: |
+        python scripts/download_from_hf.py $HF_REPO || echo "No previous model"
+    
+    - name: Train model
+      run: |
+        python scripts/train.py
+    
+    - name: Upload to Hugging Face
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        HF_REPO: ${{ secrets.HF_REPO }}
+      run: |
+        python scripts/upload_to_hf.py $HF_REPO
+    
+    - name: Notify completion
+      if: always()
+      run: |
+        echo "Training completed at $(date)"
