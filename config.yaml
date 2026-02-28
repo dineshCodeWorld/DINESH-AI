@@ -3,13 +3,13 @@
 
 # ==================== MODEL CONFIGURATION ====================
 model:
-  # Model Architecture (Optimized for GitHub Actions 6-hour limit)
-  vocab_size: 10000            # Balanced: not too small, fits in 6 hours
-  d_model: 512                 # Decent size for good quality
-  num_layers: 6                # Good depth for learning
-  num_heads: 8                 # Good attention coverage
-  d_ff: 2048                   # Good feed-forward capacity
-  max_length: 512              # Full context window
+  # Model Architecture (SMALL - fits in 6 hours on CPU)
+  vocab_size: 5000             # Small vocab for speed
+  d_model: 128                 # Small for CPU training
+  num_layers: 2                # Only 2 layers for speed
+  num_heads: 4                 # Minimal heads
+  d_ff: 512                    # Small feed-forward
+  max_length: 128              # Short sequences
   dropout: 0.1                 # Dropout rate
   
   # Generation Parameters
@@ -20,12 +20,12 @@ model:
 
 # ==================== TRAINING CONFIGURATION ====================
 training:
-  # Hyperparameters (Optimized for GitHub Actions 6-hour limit)
-  batch_size: 8                # Balanced for speed and quality
-  learning_rate: 0.0001        # Good convergence rate
+  # Hyperparameters (MINIMAL for 6-hour limit)
+  batch_size: 16               # Larger batches = fewer iterations
+  learning_rate: 0.001         # Higher LR for faster convergence
   weight_decay: 0.01           # L2 regularization
-  epochs: 3                    # Full training
-  warmup_steps: 500            # Balanced warmup
+  epochs: 1                    # Only 1 epoch to fit in time
+  warmup_steps: 100            # Minimal warmup
   
   # Optimization
   optimizer: "adamw"           # Optimizer: adamw, adam, sgd
@@ -54,9 +54,9 @@ data:
   max_length: 2048             # Maximum document length (tokens)
   shuffle: true                # Shuffle data
   
-  # BPE Tokenizer (Optimized for 6-hour training)
-  bpe_vocab_size: 10000        # Balanced vocabulary size
-  bpe_min_frequency: 1         # Include all tokens for better coverage
+  # BPE Tokenizer (SMALL for speed)
+  bpe_vocab_size: 5000         # Small vocabulary
+  bpe_min_frequency: 1         # Include all tokens
 
 # ==================== DATA SOURCES ====================
 data_sources:
