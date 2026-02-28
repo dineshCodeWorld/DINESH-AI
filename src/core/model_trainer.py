@@ -331,10 +331,22 @@ class ModelTrainer:
             self.tokenizer.load(str(model_path / "tokenizer.json"))
             
             # Create model with saved config
+            # Calculate num_heads if not in config
+            num_heads = config.get("num_heads")
+            if not num_heads:
+                # Infer from d_model (assume 64 dim per head)
+                num_heads = max(1, config["d_model"] // 64)
+            
+            d_ff = config.get("d_ff")
+            if not d_ff:
+                d_ff = config["d_model"] * 4
+            
             self.model = CustomGPT(
                 vocab_size=config["vocab_size"],
                 d_model=config["d_model"],
                 num_layers=config["num_layers"],
+                num_heads=num_heads,
+                d_ff=d_ff,
                 max_seq_len=config["max_seq_len"],
                 device=str(self.device)
             )

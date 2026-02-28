@@ -119,6 +119,8 @@ class CustomGPT(nn.Module):
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.d_ff = d_ff
         self.max_seq_len = max_seq_len
         self.device = device
         
