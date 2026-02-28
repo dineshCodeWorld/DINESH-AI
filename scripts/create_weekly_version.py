@@ -72,7 +72,7 @@ def create_weekly_version():
             path_in_repo=f"versions/weekly/dinesh_ai_model_{version}.pth",
             repo_id=repo_id,
             token=token,
-            commit_message=f"Version {version}"
+            commit_message=f"[GitHub Actions] Weekly version {version}"
         )
         
         print(f"✅ Weekly version created: v{version}")

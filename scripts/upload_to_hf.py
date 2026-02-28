@@ -54,7 +54,7 @@ def upload_model(repo_id=None, token=None):
             path_in_repo="dinesh_ai_model.pth",
             repo_id=repo_id,
             token=token,
-            commit_message=f"Update {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            commit_message=f"[Kaggle] Upload model {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         )
         print("✅ Model uploaded")
         
@@ -85,7 +85,7 @@ def upload_model(repo_id=None, token=None):
             path_in_repo=f"versions/dinesh_ai_model_v{version}.pth",
             repo_id=repo_id,
             token=token,
-            commit_message=f"Version {version}"
+            commit_message=f"[Kaggle] Version backup {version}"
         )
         print(f"✅ Version backup: v{version}")
         print(f"🔗 https://huggingface.co/{repo_id}")
