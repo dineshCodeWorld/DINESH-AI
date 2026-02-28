@@ -225,6 +225,9 @@ class CustomGPT(nn.Module):
         """
         self.eval()
         
+        # Limit max_length to model's max_seq_len
+        max_length = min(max_length, self.max_seq_len)
+        
         with torch.no_grad():
             for _ in range(max_length - input_ids.shape[1]):
                 # Get predictions for next token
@@ -233,19 +236,9 @@ class CustomGPT(nn.Module):
                 
                 # Apply top-k filtering
                 if top_k > 0:
-                    indices_to_remove = next_token_logits < torch.topk(next_token_logits, top_k)[0][..., -1, None]
-                    next_token_logits[indices_to_remove] = float('-inf')
-                
-                # Apply top-p (nucleus) sampling
-                sorted_logits, sorted_indices = torch.sort(next_token_logits, descending=True)
-                cumsum_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-                
-                sorted_indices_to_remove = cumsum_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                sorted_indices_to_remove[..., 0] = 0
-                
-                indices_to_remove = sorted_indices[sorted_indices_to_remove]
-                next_token_logits[:, indices_to_remove] = float('-inf')
+                    top_k_values, top_k_indices = torch.topk(next_token_logits, min(top_k, next_token_logits.size(-1)))
+                    next_token_logits = torch.full_like(next_token_logits, float('-inf'))
+                    next_token_logits.scatter_(1, top_k_indices, top_k_values)
                 
                 # Sample next token
                 probs = F.softmax(next_token_logits, dim=-1)

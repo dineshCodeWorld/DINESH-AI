@@ -4,12 +4,12 @@
 # ==================== MODEL CONFIGURATION ====================
 model:
   # Model Architecture (SMALL - fits in 6 hours on CPU)
-  vocab_size: 5000             # Small vocab for speed
-  d_model: 128                 # Small for CPU training
-  num_layers: 2                # Only 2 layers for speed
-  num_heads: 4                 # Minimal heads
-  d_ff: 512                    # Small feed-forward
-  max_length: 64               # Very short sequences for speed
+  vocab_size: 5000             # Increased vocab
+  d_model: 256                 # Increased from 128
+  num_layers: 4                # Increased from 2
+  num_heads: 8                 # Increased from 4
+  d_ff: 1024                   # Increased from 512
+  max_length: 128              # Increased from 64
   dropout: 0.1                 # Dropout rate
   
   # Generation Parameters
@@ -24,7 +24,7 @@ training:
   batch_size: 32               # Larger batches = fewer iterations
   learning_rate: 0.001         # Higher LR for faster convergence
   weight_decay: 0.01           # L2 regularization
-  epochs: 1                    # Only 1 epoch to fit in time
+  epochs: 5                    # Increased from 1 for better training
   warmup_steps: 100            # Minimal warmup
   
   # Optimization

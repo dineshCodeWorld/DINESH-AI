@@ -79,22 +79,68 @@ def download_and_load_model():
 st.title("🤖 Dinesh AI")
 st.markdown("*Custom GPT trained from scratch*")
 
-with st.sidebar:
-    st.header("⚙️ Settings")
-    temperature = st.slider("Temperature", 0.1, 2.0, 0.7, 0.1)
-    max_length = st.slider("Max Length", 50, 300, 150)
-
 # Show loading message
 with st.spinner("Loading model from Hugging Face..."):
     model, tokenizer, device = download_and_load_model()
+
+with st.sidebar:
+    st.header("⚙️ Settings")
+    temperature = st.slider("Temperature", 0.1, 2.0, 0.7, 0.1)
+    max_length = st.slider("Max Length", 10, 64, 50)  # Limited to model's max_seq_len
+    
+    st.divider()
+    st.subheader("📊 Model Info")
+    if model:
+        st.metric("Parameters", f"{model.count_parameters():,}")
+        st.metric("Vocab Size", f"{model.vocab_size:,}")
+        st.metric("Layers", model.num_layers)
+        st.metric("Model Dim", model.d_model)
+        st.metric("Device", str(device).upper())
+        st.info(f"🤗 Model: alien-x/dinesh-ai")
 
 if model and tokenizer:
     user_input = st.text_input("Ask me anything:", placeholder="What is AI?")
     
     if st.button("Generate") and user_input:
         with st.spinner("Generating..."):
-            # Add your generation logic here
-            st.info(f"Response for: {user_input}")
+            try:
+                # Encode input
+                encoded = tokenizer.encode(user_input)
+                input_ids = encoded.ids
+                
+                # Limit input length
+                if len(input_ids) > 100:
+                    input_ids = input_ids[:100]
+                
+                input_tensor = torch.tensor([input_ids], dtype=torch.long).to(device)
+                
+                st.info(f"Input tokens: {len(input_ids)}")
+                
+                # Generate
+                with torch.no_grad():
+                    output_ids = model.generate(
+                        input_tensor,
+                        max_length=min(max_length, 150),
+                        temperature=temperature,
+                        top_p=0.9,
+                        top_k=50,
+                        eos_token_id=2
+                    )
+                
+                # Decode
+                generated_ids = output_ids[0].cpu().tolist()
+                generated_text = tokenizer.decode(generated_ids)
+                
+                # Clean up BPE artifacts
+                generated_text = generated_text.replace('Ġ', ' ').strip()
+                
+                st.success("Response:")
+                st.write(generated_text)
+                
+            except Exception as e:
+                st.error(f"Generation error: {e}")
+                import traceback
+                st.code(traceback.format_exc())
 else:
     st.error("Model not available. Check HF_REPO environment variable.")
 
