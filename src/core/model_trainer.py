@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 class TextDataset(Dataset):
     """Custom dataset for language modeling"""
     
-    def __init__(self, file_path: str, tokenizer, max_length: int = 512):
+    def __init__(self, file_path: str, tokenizer, max_length: int = 512, stride: int = None):
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.stride = stride if stride else max_length  # Non-overlapping by default
         
         # Read and tokenize text
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -29,14 +30,21 @@ class TextDataset(Dataset):
         encodings = self.tokenizer.encode(text)
         self.token_ids = encodings.ids
         
+        # Create non-overlapping chunks
+        self.samples = []
+        for i in range(0, len(self.token_ids) - self.max_length, self.stride):
+            self.samples.append(i)
+        
         logger.info(f"Tokenized dataset: {len(self.token_ids)} tokens")
+        logger.info(f"Created {len(self.samples)} samples with stride={self.stride}")
     
     def __len__(self):
-        return len(self.token_ids) - self.max_length
+        return len(self.samples)
     
     def __getitem__(self, idx):
-        input_ids = self.token_ids[idx:idx + self.max_length]
-        target_ids = self.token_ids[idx + 1:idx + self.max_length + 1]
+        start_idx = self.samples[idx]
+        input_ids = self.token_ids[start_idx:start_idx + self.max_length]
+        target_ids = self.token_ids[start_idx + 1:start_idx + self.max_length + 1]
         
         # Pad if necessary
         if len(input_ids) < self.max_length:
