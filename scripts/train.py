@@ -108,15 +108,84 @@ class TrainingPipeline:
             logger.info(f"✓ Training data prepared: {text_file}")
             logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s | Progress: 20%")
             
-            # Step 4: Skip downloading old model (not needed for training from scratch)
-            logger.info("\n[STEP 4/6] Preparing for training... (Progress: 20%)")
+            # Step 4: Download latest model for fine-tuning (75% of total time)
+            logger.info("\n[STEP 4/6] Downloading latest model from Hugging Face... (Progress: 20%)")
             
-            # Step 5: Train model from scratch (75% of total time)
+            # Try to download existing model
+            import os
+            from huggingface_hub import hf_hub_download, HfApi
+            
+            existing_model_dir = None
+            hf_repo = os.environ.get('HF_REPO')
+            
+            if hf_repo:
+                try:
+                    logger.info(f"Attempting to download latest model from {hf_repo}...")
+                    
+                    # First try to get the latest version from versions folder
+                    api = HfApi()
+                    files = api.list_repo_files(repo_id=hf_repo)
+                    version_files = [f for f in files if f.startswith('versions/') and f.endswith('.pth')]
+                    
+                    model_to_download = "dinesh_ai_model.pth"  # Default
+                    
+                    if version_files:
+                        # Sort by version number and timestamp to get latest
+                        import re
+                        def extract_version(filename):
+                            match = re.search(r'_v(\d+)_(\d{4}-\d{2}-\d{2}_\d{6})', filename)
+                            if match:
+                                return (int(match.group(1)), match.group(2))
+                            return (0, '')
+                        
+                        latest_version_file = max(version_files, key=extract_version)
+                        logger.info(f"Found latest version: {latest_version_file}")
+                        model_to_download = latest_version_file
+                    
+                    model_path = hf_hub_download(repo_id=hf_repo, filename=model_to_download, cache_dir="models")
+                    tokenizer_path = hf_hub_download(repo_id=hf_repo, filename="tokenizer.json", cache_dir="models")
+                    config_path = hf_hub_download(repo_id=hf_repo, filename="model_config.json", cache_dir="models")
+                    
+                    # Check vocab size compatibility
+                    import json
+                    with open(config_path) as f:
+                        old_config = json.load(f)
+                    
+                    old_vocab = old_config.get('vocab_size', 0)
+                    new_vocab = yaml_config.get('model', {}).get('vocab_size', 8000)
+                    
+                    if old_vocab != new_vocab:
+                        logger.warning(f"Vocab size mismatch: old={old_vocab}, new={new_vocab}")
+                        logger.warning("Cannot fine-tune. Will train from scratch.")
+                        existing_model_dir = None
+                    else:
+                        # Create temp directory with downloaded files
+                        import shutil
+                        existing_model_dir = MODELS_DIR / "downloaded_model"
+                        existing_model_dir.mkdir(exist_ok=True)
+                        shutil.copy(model_path, existing_model_dir / "model.pt")
+                        shutil.copy(tokenizer_path, existing_model_dir / "tokenizer.json")
+                        shutil.copy(config_path, existing_model_dir / "model_config.json")
+                        logger.info(f"✓ Latest model downloaded: {model_to_download}")
+                except Exception as e:
+                    logger.warning(f"Could not download existing model: {e}")
+                    logger.info("Will train from scratch instead")
+            
+            # Step 5: Train/Fine-tune model (75% of total time)
             logger.info("\n[STEP 5/6] Training model... (Progress: 30%)")
             logger.info("⚠️  This will take the longest time (65% of total)")
-            logger.info("🆕 Training new model from scratch...")
             
-            model_output_dir = self.trainer.train(str(text_file))
+            if existing_model_dir and existing_model_dir.exists():
+                logger.info("🔄 Fine-tuning existing model with new data...")
+                self.trainer.load_trained_model(str(existing_model_dir))
+                model_output_dir = self.trainer.fine_tune(
+                    str(text_file),
+                    epochs=yaml_config.get('training', {}).get('epochs', 3),
+                    learning_rate=yaml_config.get('training', {}).get('learning_rate', 0.0001) / 10
+                )
+            else:
+                logger.info("🆕 Training new model from scratch...")
+                model_output_dir = self.trainer.train(str(text_file))
             
             self.pipeline_log.append({
                 "step": "model_training",
