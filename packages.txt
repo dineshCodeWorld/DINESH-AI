@@ -1,6 +1,2 @@
-torch
-tokenizers
-streamlit
-huggingface_hub
-pyyaml
-requests
+# System packages (apt-get)
+# Leave empty if not needed
