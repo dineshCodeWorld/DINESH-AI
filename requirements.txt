@@ -5,3 +5,5 @@ transformers
 huggingface_hub
 pyyaml
 requests
+beautifulsoup4
+tqdm
