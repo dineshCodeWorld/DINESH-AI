@@ -84,7 +84,9 @@ with st.sidebar:
     temperature = st.slider("Temperature", 0.1, 2.0, 0.7, 0.1)
     max_length = st.slider("Max Length", 50, 300, 150)
 
-model, tokenizer, device = download_and_load_model()
+# Show loading message
+with st.spinner("Loading model from Hugging Face..."):
+    model, tokenizer, device = download_and_load_model()
 
 if model and tokenizer:
     user_input = st.text_input("Ask me anything:", placeholder="What is AI?")
