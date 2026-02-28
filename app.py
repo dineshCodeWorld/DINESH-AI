@@ -15,19 +15,22 @@ from src.core.custom_model import CustomGPT
 
 st.set_page_config(page_title="Dinesh AI", page_icon="🤖", layout="wide")
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Downloading model from Hugging Face...")
 def download_and_load_model():
     """Download latest model from Hugging Face and load it"""
     try:
-        repo_id = os.environ.get('HF_REPO', 'yourusername/dinesh-ai')
+        repo_id = os.environ.get('HF_REPO')
         
-        st.info(f"Downloading model from {repo_id}...")
+        if not repo_id:
+            st.error("HF_REPO not set in secrets!")
+            return None, None, None
         
         # Download model files
         model_path = hf_hub_download(
             repo_id=repo_id,
             filename="dinesh_ai_model.pth",
-            cache_dir="models"
+            cache_dir="models",
+            token=None
         )
         
         tokenizer_path = hf_hub_download(
@@ -62,11 +65,10 @@ def download_and_load_model():
         )
         
         # Load weights
-        model.load_state_dict(torch.load(model_path, map_location=device))
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
         model.to(device)
         model.eval()
         
-        st.success("Model loaded successfully!")
         return model, tokenizer, device
         
     except Exception as e:
