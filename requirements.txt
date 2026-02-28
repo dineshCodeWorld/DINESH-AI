@@ -7,3 +7,5 @@ pyyaml
 requests
 beautifulsoup4
 tqdm
+datasets
+numpy
