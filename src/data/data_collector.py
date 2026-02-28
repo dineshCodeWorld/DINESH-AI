@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import random
 import hashlib
 import time
+import re
 from ..config_loader import DATA_DIR, DATA_SOURCES, LOGGING_CONFIG
 
 logging.basicConfig(**LOGGING_CONFIG)
@@ -279,6 +280,162 @@ class DataCollector:
             logger.error(f"Error collecting from Gutenberg: {str(e)}")
             return texts
     
+    def collect_from_reddit(self, limit: int = 100) -> List[Dict]:
+        """Collect posts from Reddit (no API key needed)"""
+        logger.info(f"Starting Reddit data collection (target: {limit})...")
+        posts = []
+        
+        try:
+            subreddits = ['AskReddit', 'explainlikeimfive', 'todayilearned', 'science', 'technology']
+            headers = {'User-Agent': 'DineshAI/1.0'}
+            
+            for subreddit in subreddits:
+                if len(posts) >= limit:
+                    break
+                
+                time.sleep(2)
+                url = f"https://www.reddit.com/r/{subreddit}/top.json?limit=20&t=week"
+                
+                try:
+                    response = requests.get(url, headers=headers, timeout=15)
+                    if response.status_code == 200:
+                        data = response.json()
+                        
+                        for post in data.get('data', {}).get('children', []):
+                            if len(posts) >= limit:
+                                break
+                            
+                            post_data = post.get('data', {})
+                            title = post_data.get('title', '')
+                            selftext = post_data.get('selftext', '')
+                            
+                            content = f"{title}. {selftext}"
+                            
+                            if len(content) > 100 and not self._is_duplicate(content):
+                                posts.append({
+                                    "source": "reddit",
+                                    "title": title,
+                                    "content": content[:3000],
+                                    "url": f"https://reddit.com{post_data.get('permalink', '')}",
+                                    "timestamp": datetime.now().isoformat()
+                                })
+                except Exception as e:
+                    logger.warning(f"Error fetching r/{subreddit}: {e}")
+                    continue
+            
+            logger.info(f"Collected {len(posts)} Reddit posts")
+            return posts
+            
+        except Exception as e:
+            logger.error(f"Error collecting from Reddit: {str(e)}")
+            return posts
+    
+    def collect_from_hackernews(self, limit: int = 50) -> List[Dict]:
+        """Collect stories from Hacker News"""
+        logger.info(f"Starting HackerNews data collection (target: {limit})...")
+        stories = []
+        
+        try:
+            # Get top stories
+            response = requests.get('https://hacker-news.firebaseio.com/v0/topstories.json', timeout=10)
+            if response.status_code == 200:
+                story_ids = response.json()[:limit * 2]  # Get extra in case some fail
+                
+                for story_id in story_ids:
+                    if len(stories) >= limit:
+                        break
+                    
+                    time.sleep(0.5)
+                    story_response = requests.get(
+                        f'https://hacker-news.firebaseio.com/v0/item/{story_id}.json',
+                        timeout=10
+                    )
+                    
+                    if story_response.status_code == 200:
+                        story = story_response.json()
+                        title = story.get('title', '')
+                        text = story.get('text', '')
+                        url = story.get('url', '')
+                        
+                        content = f"{title}. {text}"
+                        
+                        if len(content) > 50 and not self._is_duplicate(content):
+                            stories.append({
+                                "source": "hackernews",
+                                "title": title,
+                                "content": content[:2000],
+                                "url": url or f"https://news.ycombinator.com/item?id={story_id}",
+                                "timestamp": datetime.now().isoformat()
+                            })
+            
+            logger.info(f"Collected {len(stories)} HackerNews stories")
+            return stories
+            
+        except Exception as e:
+            logger.error(f"Error collecting from HackerNews: {str(e)}")
+            return stories
+    
+    def collect_from_common_crawl(self, limit: int = 50) -> List[Dict]:
+        """Collect from Common Crawl News dataset"""
+        logger.info(f"Starting Common Crawl data collection (target: {limit})...")
+        articles = []
+        
+        try:
+            # Use Common Crawl News API
+            url = "https://data.commoncrawl.org/crawl-data/CC-NEWS/index.html"
+            headers = {'User-Agent': 'DineshAI/1.0'}
+            
+            # For simplicity, collect from news sites via RSS
+            rss_feeds = [
+                'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
+                'https://feeds.bbci.co.uk/news/technology/rss.xml',
+            ]
+            
+            for feed_url in rss_feeds:
+                if len(articles) >= limit:
+                    break
+                
+                time.sleep(2)
+                try:
+                    response = requests.get(feed_url, headers=headers, timeout=15)
+                    if response.status_code == 200:
+                        root = ET.fromstring(response.content)
+                        
+                        for item in root.findall('.//item'):
+                            if len(articles) >= limit:
+                                break
+                            
+                            title_elem = item.find('title')
+                            desc_elem = item.find('description')
+                            link_elem = item.find('link')
+                            
+                            if title_elem is not None and desc_elem is not None:
+                                title = title_elem.text or ''
+                                desc = desc_elem.text or ''
+                                
+                                # Clean HTML tags
+                                desc = re.sub(r'<[^>]+>', '', desc)
+                                content = f"{title}. {desc}"
+                                
+                                if len(content) > 100 and not self._is_duplicate(content):
+                                    articles.append({
+                                        "source": "news",
+                                        "title": title,
+                                        "content": content[:2000],
+                                        "url": link_elem.text if link_elem is not None else "",
+                                        "timestamp": datetime.now().isoformat()
+                                    })
+                except Exception as e:
+                    logger.warning(f"Error fetching feed: {e}")
+                    continue
+            
+            logger.info(f"Collected {len(articles)} news articles")
+            return articles
+            
+        except Exception as e:
+            logger.error(f"Error collecting from news feeds: {str(e)}")
+            return articles
+    
     def save_collected_data(self, data: List[Dict], filename: str = None) -> str:
         """Save collected data to JSON file"""
         if not filename:
@@ -295,13 +452,23 @@ class DataCollector:
     def collect_all(self, limits: Dict = None) -> str:
         """Collect data from all sources"""
         if limits is None:
-            limits = {"wikipedia": 50, "arxiv": 30, "gutenberg": 10}
+            limits = {
+                "wikipedia": 50,
+                "arxiv": 30,
+                "gutenberg": 10,
+                "reddit": 100,
+                "hackernews": 50,
+                "news": 50
+            }
         
         all_data = []
         
         all_data.extend(self.collect_from_wikipedia_api(limits.get("wikipedia", 50)))
         all_data.extend(self.collect_from_arxiv(limits.get("arxiv", 30)))
         all_data.extend(self.collect_from_gutenberg(limits.get("gutenberg", 10)))
+        all_data.extend(self.collect_from_reddit(limits.get("reddit", 100)))
+        all_data.extend(self.collect_from_hackernews(limits.get("hackernews", 50)))
+        all_data.extend(self.collect_from_common_crawl(limits.get("news", 50)))
         
         # Save seen hashes for future deduplication
         self._save_seen_hashes()

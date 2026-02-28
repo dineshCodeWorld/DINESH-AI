@@ -108,10 +108,51 @@ class TrainingPipeline:
             logger.info(f"✓ Training data prepared: {text_file}")
             logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s | Progress: 20%")
             
-            # Step 4: Train model (75% of total time)
-            logger.info("\n[STEP 4/5] Training model... (Progress: 20%)")
-            logger.info("⚠️  This will take the longest time (75% of total)")
-            model_output_dir = self.trainer.train(str(text_file))
+            # Step 4: Download latest model and fine-tune (75% of total time)
+            logger.info("\n[STEP 4/6] Downloading latest model from Hugging Face... (Progress: 20%)")
+            
+            # Try to download existing model
+            import os
+            from huggingface_hub import hf_hub_download
+            
+            existing_model_dir = None
+            hf_repo = os.environ.get('HF_REPO')
+            
+            if hf_repo:
+                try:
+                    logger.info(f"Attempting to download latest model from {hf_repo}...")
+                    model_path = hf_hub_download(repo_id=hf_repo, filename="dinesh_ai_model.pth", cache_dir="models")
+                    tokenizer_path = hf_hub_download(repo_id=hf_repo, filename="tokenizer.json", cache_dir="models")
+                    config_path = hf_hub_download(repo_id=hf_repo, filename="model_config.json", cache_dir="models")
+                    
+                    # Create temp directory with downloaded files
+                    import shutil
+                    existing_model_dir = MODELS_DIR / "downloaded_model"
+                    existing_model_dir.mkdir(exist_ok=True)
+                    shutil.copy(model_path, existing_model_dir / "model.pt")
+                    shutil.copy(tokenizer_path, existing_model_dir / "tokenizer.json")
+                    shutil.copy(config_path, existing_model_dir / "model_config.json")
+                    
+                    logger.info("✓ Latest model downloaded successfully")
+                except Exception as e:
+                    logger.warning(f"Could not download existing model: {e}")
+                    logger.info("Will train from scratch instead")
+            
+            # Step 5: Train/Fine-tune model (75% of total time)
+            logger.info("\n[STEP 5/6] Training model... (Progress: 30%)")
+            logger.info("⚠️  This will take the longest time (65% of total)")
+            
+            if existing_model_dir and existing_model_dir.exists():
+                logger.info("🔄 Fine-tuning existing model with new data...")
+                self.trainer.load_trained_model(str(existing_model_dir))
+                model_output_dir = self.trainer.fine_tune(
+                    str(text_file),
+                    epochs=yaml_config.get('training', {}).get('epochs', 3),
+                    learning_rate=yaml_config.get('training', {}).get('learning_rate', 0.0001) / 10  # Lower LR for fine-tuning
+                )
+            else:
+                logger.info("🆕 Training new model from scratch...")
+                model_output_dir = self.trainer.train(str(text_file))
             
             self.pipeline_log.append({
                 "step": "model_training",
@@ -123,8 +164,8 @@ class TrainingPipeline:
             logger.info(f"✓ Model training completed: {model_output_dir}")
             logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s ({elapsed/60:.1f} min) | Progress: 95%")
             
-            # Step 5: Prepare for deployment (5% of total time)
-            logger.info("\n[STEP 5/5] Preparing for deployment... (Progress: 95%)")
+            # Step 6: Prepare for deployment (5% of total time)
+            logger.info("\n[STEP 6/6] Preparing for deployment... (Progress: 95%)")
             version = datetime.now().strftime('%Y%m%d_%H%M%S')
             deployment_info = self.deployer.prepare_for_deployment(model_output_dir, version)
             
@@ -213,9 +254,12 @@ def main():
     
     # Get collection limits from config
     collect_limits = {
-        "wikipedia": DATA_SOURCES.get("wikipedia", {}).get("limit", 1000),
+        "wikipedia": DATA_SOURCES.get("wikipedia", {}).get("limit", 800),
         "arxiv": DATA_SOURCES.get("arxiv", {}).get("limit", 500),
-        "gutenberg": DATA_SOURCES.get("gutenberg", {}).get("limit", 100)
+        "gutenberg": DATA_SOURCES.get("gutenberg", {}).get("limit", 200),
+        "reddit": DATA_SOURCES.get("reddit", {}).get("limit", 100),
+        "hackernews": DATA_SOURCES.get("hackernews", {}).get("limit", 50),
+        "news": DATA_SOURCES.get("news", {}).get("limit", 50)
     }
     logger.info(f"Collection limits: {collect_limits}")
     

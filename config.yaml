@@ -92,6 +92,27 @@ data_sources:
     limit: 200                 # Increased: novels have dialogues
     mirror: "https://www.gutenberg.org"  # Gutenberg mirror
     # Note: Fiction books contain natural conversations and dialogues
+  
+  # Reddit Configuration
+  reddit:
+    enabled: true
+    limit: 100                 # Reddit posts and discussions
+    subreddits:
+      - AskReddit
+      - explainlikeimfive
+      - todayilearned
+      - science
+      - technology
+  
+  # HackerNews Configuration
+  hackernews:
+    enabled: true
+    limit: 50                  # Top HN stories
+  
+  # News RSS Feeds
+  news:
+    enabled: true
+    limit: 50                  # News articles from RSS feeds
 
 # ==================== CONTINUOUS LEARNING ====================
 continuous:

@@ -29,9 +29,12 @@ jobs:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
         HF_REPO: ${{ secrets.HF_REPO }}
       run: |
-        python scripts/download_from_hf.py $HF_REPO || echo "No previous model"
+        python scripts/download_from_hf.py $HF_REPO || echo "No previous model found, will train from scratch"
     
-    - name: Train model
+    - name: Train/Fine-tune model
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        HF_REPO: ${{ secrets.HF_REPO }}
       run: |
         python scripts/train.py
     
