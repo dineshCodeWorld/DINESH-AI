@@ -178,7 +178,9 @@ class ModelTrainer:
                 dataset,
                 batch_size=MODEL_CONFIG.get("batch_size", 16),
                 shuffle=True,
-                num_workers=0
+                num_workers=2,
+                pin_memory=True,
+                persistent_workers=True
             )
             
             # Training setup
@@ -390,7 +392,9 @@ class ModelTrainer:
                 dataset,
                 batch_size=MODEL_CONFIG.get("batch_size", 16),
                 shuffle=True,
-                num_workers=0
+                num_workers=2,
+                pin_memory=True,
+                persistent_workers=True
             )
             
             # Fine-tuning setup (lower learning rate)

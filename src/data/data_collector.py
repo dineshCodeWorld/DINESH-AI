@@ -9,6 +9,7 @@ from typing import List, Dict
 import xml.etree.ElementTree as ET
 import random
 import hashlib
+import time
 from ..config_loader import DATA_DIR, DATA_SOURCES, LOGGING_CONFIG
 
 logging.basicConfig(**LOGGING_CONFIG)
@@ -75,8 +76,13 @@ class DataCollector:
                     "rnlimit": batch_size
                 }
                 
-                response = requests.get(url, params=params, headers=headers, timeout=10)
-                if response.status_code == 200:
+                time.sleep(0.5)  # Rate limit protection
+                response = requests.get(url, params=params, headers=headers, timeout=15)
+                if response.status_code == 429:
+                    logger.warning("Wikipedia rate limit hit, waiting 10 seconds...")
+                    time.sleep(10)
+                    continue
+                elif response.status_code == 200:
                     data = response.json()
                     for page in data.get("query", {}).get("random", []):
                         if len(articles) >= limit:
@@ -93,8 +99,13 @@ class DataCollector:
                             "prop": "extracts",
                             "explaintext": True
                         }
-                        content_response = requests.get(url, params=content_params, headers=headers, timeout=10)
-                        if content_response.status_code == 200:
+                        time.sleep(0.3)  # Rate limit protection
+                        content_response = requests.get(url, params=content_params, headers=headers, timeout=15)
+                        if content_response.status_code == 429:
+                            logger.warning("Wikipedia rate limit on content, waiting 5 seconds...")
+                            time.sleep(5)
+                            continue
+                        elif content_response.status_code == 200:
                             content_data = content_response.json()
                             pages = content_data.get("query", {}).get("pages", {})
                             if str(page_id) in pages:
@@ -146,7 +157,18 @@ class DataCollector:
                     "sortOrder": "descending"
                 }
                 
-                response = requests.get(base_url, params=params, timeout=15)
+                time.sleep(1)  # ArXiv rate limit (1 req/sec)
+                try:
+                    response = requests.get(base_url, params=params, timeout=20)
+                except requests.exceptions.Timeout:
+                    logger.warning(f"ArXiv timeout for {category}, retrying...")
+                    time.sleep(3)
+                    try:
+                        response = requests.get(base_url, params=params, timeout=30)
+                    except:
+                        logger.error(f"ArXiv failed for {category} after retry")
+                        continue
+                
                 if response.status_code == 200:
                     root = ET.fromstring(response.content)
                     
@@ -189,11 +211,27 @@ class DataCollector:
             
             # Collect from multiple pages until we reach limit
             page = 1
+            retries = 0
+            max_retries = 3
+            
             while len(texts) < limit and page <= 10:  # Max 10 pages
                 params = {"page": page}
                 
-                response = requests.get(url, params=params, timeout=10)
+                time.sleep(1)  # Rate limit protection
+                try:
+                    response = requests.get(url, params=params, timeout=20)
+                except requests.exceptions.Timeout:
+                    if retries < max_retries:
+                        retries += 1
+                        logger.warning(f"Gutenberg timeout, retry {retries}/{max_retries}...")
+                        time.sleep(5)
+                        continue
+                    else:
+                        logger.error("Gutenberg max retries reached")
+                        break
+                
                 if response.status_code == 200:
+                    retries = 0  # Reset on success
                     data = response.json()
                     books = data.get("results", [])
                     
