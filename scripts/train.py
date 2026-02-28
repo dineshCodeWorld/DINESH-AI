@@ -113,7 +113,7 @@ class TrainingPipeline:
             
             # Try to download existing model
             import os
-            from huggingface_hub import hf_hub_download
+            from huggingface_hub import hf_hub_download, HfApi
             
             existing_model_dir = None
             hf_repo = os.environ.get('HF_REPO')
@@ -121,7 +121,28 @@ class TrainingPipeline:
             if hf_repo:
                 try:
                     logger.info(f"Attempting to download latest model from {hf_repo}...")
-                    model_path = hf_hub_download(repo_id=hf_repo, filename="dinesh_ai_model.pth", cache_dir="models")
+                    
+                    # First try to get the latest version from versions folder
+                    api = HfApi()
+                    files = api.list_repo_files(repo_id=hf_repo)
+                    version_files = [f for f in files if f.startswith('versions/') and f.endswith('.pth')]
+                    
+                    model_to_download = "dinesh_ai_model.pth"  # Default
+                    
+                    if version_files:
+                        # Sort by version number and timestamp to get latest
+                        import re
+                        def extract_version(filename):
+                            match = re.search(r'_v(\d+)_(\d{4}-\d{2}-\d{2}_\d{6})', filename)
+                            if match:
+                                return (int(match.group(1)), match.group(2))
+                            return (0, '')
+                        
+                        latest_version_file = max(version_files, key=extract_version)
+                        logger.info(f"Found latest version: {latest_version_file}")
+                        model_to_download = latest_version_file
+                    
+                    model_path = hf_hub_download(repo_id=hf_repo, filename=model_to_download, cache_dir="models")
                     tokenizer_path = hf_hub_download(repo_id=hf_repo, filename="tokenizer.json", cache_dir="models")
                     config_path = hf_hub_download(repo_id=hf_repo, filename="model_config.json", cache_dir="models")
                     
@@ -133,7 +154,7 @@ class TrainingPipeline:
                     shutil.copy(tokenizer_path, existing_model_dir / "tokenizer.json")
                     shutil.copy(config_path, existing_model_dir / "model_config.json")
                     
-                    logger.info("✓ Latest model downloaded successfully")
+                    logger.info(f"✓ Latest model downloaded: {model_to_download}")
                 except Exception as e:
                     logger.warning(f"Could not download existing model: {e}")
                     logger.info("Will train from scratch instead")

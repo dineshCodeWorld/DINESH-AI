@@ -78,16 +78,35 @@ def upload_model(repo_id=None, token=None):
             )
             print("✅ Config uploaded")
         
-        # Create version backup
-        version = datetime.now().strftime('%Y-%m-%d')
+        # Create version backup with timestamp
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+        
+        # Get next version number
+        try:
+            files = api.list_repo_files(repo_id=repo_id, token=token)
+            version_files = [f for f in files if f.startswith('versions/') and '_v' in f]
+            
+            version_numbers = []
+            for f in version_files:
+                import re
+                match = re.search(r'_v(\d+)_', f)
+                if match:
+                    version_numbers.append(int(match.group(1)))
+            
+            next_version = max(version_numbers) + 1 if version_numbers else 1
+        except:
+            next_version = 1
+        
+        version_name = f"v{next_version}_{timestamp}"
+        
         api.upload_file(
             path_or_fileobj=str(model_file),
-            path_in_repo=f"versions/dinesh_ai_model_v{version}.pth",
+            path_in_repo=f"versions/dinesh_ai_model_{version_name}.pth",
             repo_id=repo_id,
             token=token,
-            commit_message=f"[Kaggle] Version backup {version}"
+            commit_message=f"[Kaggle] Version {version_name}"
         )
-        print(f"✅ Version backup: v{version}")
+        print(f"✅ Version backup: {version_name}")
         print(f"🔗 https://huggingface.co/{repo_id}")
         return True
         
