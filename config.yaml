@@ -3,13 +3,13 @@
 
 # ==================== MODEL CONFIGURATION ====================
 model:
-  # Model Architecture (SMALL - fits in 6 hours on CPU)
-  vocab_size: 5000             # Increased vocab
-  d_model: 256                 # Increased from 128
-  num_layers: 4                # Increased from 2
-  num_heads: 8                 # Increased from 4
-  d_ff: 1024                   # Increased from 512
-  max_length: 128              # Increased from 64
+  # Model Architecture (Optimized for quality)
+  vocab_size: 8000             # Larger vocab for better word coverage
+  d_model: 512                 # Increased from 256 for better representations
+  num_layers: 6                # Increased from 4 for deeper learning
+  num_heads: 8                 # Matches d_model (512/64=8)
+  d_ff: 2048                   # 4x d_model for better feature extraction
+  max_length: 256              # Longer context for better understanding
   dropout: 0.1                 # Dropout rate
   
   # Generation Parameters
@@ -20,12 +20,12 @@ model:
 
 # ==================== TRAINING CONFIGURATION ====================
 training:
-  # Hyperparameters (MINIMAL for 6-hour limit)
-  batch_size: 32               # Larger batches = fewer iterations
-  learning_rate: 0.001         # Higher LR for faster convergence
+  # Hyperparameters (Optimized for GPU training)
+  batch_size: 16               # Balanced for GPU memory
+  learning_rate: 0.0003        # Standard for transformers
   weight_decay: 0.01           # L2 regularization
-  epochs: 5                    # Increased from 1 for better training
-  warmup_steps: 100            # Minimal warmup
+  epochs: 10                   # More epochs for better learning
+  warmup_steps: 500            # Gradual warmup
   
   # Optimization
   optimizer: "adamw"           # Optimizer: adamw, adam, sgd
@@ -54,16 +54,16 @@ data:
   max_length: 2048             # Maximum document length (tokens)
   shuffle: true                # Shuffle data
   
-  # BPE Tokenizer (SMALL for speed)
-  bpe_vocab_size: 5000         # Small vocabulary
-  bpe_min_frequency: 1         # Include all tokens
+  # BPE Tokenizer (Optimized)
+  bpe_vocab_size: 8000         # Larger vocabulary
+  bpe_min_frequency: 2         # Filter rare tokens
 
 # ==================== DATA SOURCES ====================
 data_sources:
   # Wikipedia Configuration
   wikipedia:
     enabled: true
-    limit: 800                 # Reduced to make room for dialogue data
+    limit: 500                 # Quality over quantity
     categories:
       - Technology
       - Science
@@ -71,13 +71,13 @@ data_sources:
       - Culture
       - Business
       - Health
-      - Philosophy              # Added: conversational reasoning
-      - Psychology              # Added: human behavior/communication
+      - Philosophy
+      - Psychology
   
   # ArXiv Configuration
   arxiv:
     enabled: true
-    limit: 500                 # Number of papers to collect
+    limit: 300                 # Research papers
     sort_by: "submittedDate"   # Sort by: submittedDate, relevance
     categories:
       - cs.AI                  # Artificial Intelligence
