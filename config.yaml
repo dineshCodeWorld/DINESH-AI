@@ -9,7 +9,7 @@ model:
   num_layers: 2                # Only 2 layers for speed
   num_heads: 4                 # Minimal heads
   d_ff: 512                    # Small feed-forward
-  max_length: 128              # Short sequences
+  max_length: 64               # Very short sequences for speed
   dropout: 0.1                 # Dropout rate
   
   # Generation Parameters
@@ -21,7 +21,7 @@ model:
 # ==================== TRAINING CONFIGURATION ====================
 training:
   # Hyperparameters (MINIMAL for 6-hour limit)
-  batch_size: 16               # Larger batches = fewer iterations
+  batch_size: 32               # Larger batches = fewer iterations
   learning_rate: 0.001         # Higher LR for faster convergence
   weight_decay: 0.01           # L2 regularization
   epochs: 1                    # Only 1 epoch to fit in time
