@@ -2,6 +2,27 @@ from huggingface_hub import HfApi
 from datetime import datetime
 from pathlib import Path
 import os
+import re
+
+def get_next_version_number(api, repo_id, token):
+    """Get next version number by checking existing versions in HF repo"""
+    try:
+        files = api.list_repo_files(repo_id=repo_id, token=token)
+        version_files = [f for f in files if f.startswith('versions/weekly/') and 'v' in f]
+        
+        if not version_files:
+            return 1
+        
+        # Extract version numbers from filenames like dinesh_ai_model_v1_2026-02-28_143052.pth
+        version_numbers = []
+        for f in version_files:
+            match = re.search(r'_v(\d+)_', f)
+            if match:
+                version_numbers.append(int(match.group(1)))
+        
+        return max(version_numbers) + 1 if version_numbers else 1
+    except:
+        return 1
 
 def find_latest_model():
     """Find the most recently created model directory"""
@@ -38,16 +59,20 @@ def create_weekly_version():
         print(f"📦 Found model: {model_path}")
         
         api = HfApi()
-        version = datetime.now().strftime('%Y-%m-%d')
         
-        print(f"📦 Creating weekly version: v{version}")
+        # Get next version number
+        version_num = get_next_version_number(api, repo_id, token)
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+        version = f"v{version_num}_{timestamp}"
+        
+        print(f"📦 Creating version: {version}")
         
         api.upload_file(
             path_or_fileobj=str(model_path),
-            path_in_repo=f"versions/weekly/dinesh_ai_model_v{version}.pth",
+            path_in_repo=f"versions/weekly/dinesh_ai_model_{version}.pth",
             repo_id=repo_id,
             token=token,
-            commit_message=f"Weekly version {version}"
+            commit_message=f"Version {version}"
         )
         
         print(f"✅ Weekly version created: v{version}")
