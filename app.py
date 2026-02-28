@@ -11,19 +11,37 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 from src.core.custom_model import CustomGPT
 
-st.set_page_config(page_title="Dinesh AI", page_icon="✨", layout="centered")
+st.set_page_config(page_title="Dinesh AI", page_icon="✨", layout="wide", initial_sidebar_state="expanded")
 
-st.markdown("""
+# Initialize session state
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if 'selected_model' not in st.session_state:
+    st.session_state.selected_model = 'Latest'
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = True
+
+# Dynamic theme CSS
+theme = """
 <style>
     #MainMenu, footer, header {visibility: hidden;}
-    .stApp {background: #0e1117;}
-    .block-container {padding: 2rem 1rem; max-width: 700px;}
+    .stApp {background: %s; color: %s;}
+    .block-container {padding: 2rem 1rem;}
+    
+    .msg {
+        padding: 16px;
+        border-radius: 12px;
+        margin: 12px 0;
+        border-left: 4px solid %s;
+    }
+    .user {background: %s; color: %s;}
+    .bot {background: %s; color: %s;}
     
     .stTextInput input {
-        background: #1e1e1e;
-        border: 1px solid #333;
+        background: %s;
+        border: 1px solid %s;
         border-radius: 12px;
-        color: white;
+        color: %s;
         padding: 12px 16px;
     }
     
@@ -33,38 +51,33 @@ st.markdown("""
         border: none;
         border-radius: 12px;
         padding: 12px 24px;
-        width: 100%;
     }
-    
-    .msg {
-        padding: 16px;
-        border-radius: 12px;
-        margin: 12px 0;
-    }
-    
-    .user {background: #1e3a5f; color: white;}
-    .bot {background: #1e1e1e; color: #e0e0e0;}
 </style>
-""", unsafe_allow_html=True)
+""" % (
+    ("#0e1117", "#e0e0e0", "#667eea", "#1e3a5f", "white", "#1e1e1e", "#e0e0e0", "#1e1e1e", "#333", "white") if st.session_state.dark_mode
+    else ("#ffffff", "#1a1a1a", "#667eea", "#e3f2fd", "#1a1a1a", "#f5f5f5", "#1a1a1a", "#ffffff", "#ddd", "#1a1a1a")
+)
 
-@st.cache_data(ttl=300)
+st.markdown(theme, unsafe_allow_html=True)
+
+@st.cache_data(ttl=60)
 def get_models():
     try:
+        from huggingface_hub import list_repo_commits
         repo_id = os.environ.get('HF_REPO')
         if not repo_id:
             return {"Latest": "dinesh_ai_model.pth"}
         
-        api = HfApi()
-        files = api.list_repo_files(repo_id=repo_id)
+        commits = list(list_repo_commits(repo_id=repo_id))
         models = {"Latest": "dinesh_ai_model.pth"}
         
-        for f in files:
-            if f.startswith('versions/') and f.endswith('.pth'):
-                v = f.split('/')[-1].replace('dinesh_ai_model_', '').replace('.pth', '')
-                models[v] = f
+        for commit in commits[:20]:  # Show last 20 versions
+            date = commit.created_at.strftime("%Y-%m-%d %H:%M")
+            models[f"{date} ({commit.commit_id[:7]})"] = f"dinesh_ai_model.pth?revision={commit.commit_id}"
         
         return models
-    except:
+    except Exception as e:
+        st.sidebar.error(f"Error: {e}")
         return {"Latest": "dinesh_ai_model.pth"}
 
 @st.cache_resource
@@ -72,11 +85,16 @@ def load_model(model_file: str):
     try:
         repo_id = os.environ.get('HF_REPO')
         if not repo_id:
-            return None, None, None
+            return None, None, None, None
         
-        model_path = hf_hub_download(repo_id=repo_id, filename=model_file, cache_dir="models")
-        tokenizer_path = hf_hub_download(repo_id=repo_id, filename="tokenizer.json", cache_dir="models")
-        config_path = hf_hub_download(repo_id=repo_id, filename="model_config.json", cache_dir="models")
+        # Extract revision if present
+        revision = None
+        if "?revision=" in model_file:
+            model_file, revision = model_file.split("?revision=")
+        
+        model_path = hf_hub_download(repo_id=repo_id, filename=model_file, cache_dir="models", revision=revision)
+        tokenizer_path = hf_hub_download(repo_id=repo_id, filename="tokenizer.json", cache_dir="models", revision=revision)
+        config_path = hf_hub_download(repo_id=repo_id, filename="model_config.json", cache_dir="models", revision=revision)
         
         with open(config_path) as f:
             config = json.load(f)
@@ -97,64 +115,113 @@ def load_model(model_file: str):
         model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
         model.to(device)
         model.eval()
-        return model, tokenizer, device
-    except:
-        return None, None, None
+        return model, tokenizer, device, config
+    except Exception as e:
+        st.error(f"Error: {e}")
+        return None, None, None, None
 
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'selected_model' not in st.session_state:
-    st.session_state.selected_model = 'Latest'
-
-# Header
-col1, col2 = st.columns([3, 2])
-with col1:
-    st.title("✨ Dinesh AI")
-with col2:
+# Sidebar
+with st.sidebar:
+    st.title("⚙️ Settings")
+    
+    # Theme toggle
+    if st.button("🌓 Toggle Theme", use_container_width=True):
+        st.session_state.dark_mode = not st.session_state.dark_mode
+        st.rerun()
+    
+    st.divider()
+    
+    # Model selector
+    st.subheader("🤖 Model")
     models = get_models()
-    selected = st.selectbox("Model", list(models.keys()), 
+    selected = st.selectbox("Version", list(models.keys()), 
                            index=list(models.keys()).index(st.session_state.selected_model))
     if selected != st.session_state.selected_model:
         st.session_state.selected_model = selected
         st.cache_resource.clear()
         st.rerun()
+    
+    st.divider()
+    
+    # Generation parameters
+    st.subheader("🎛️ Parameters")
+    temperature = st.slider("Temperature", 0.1, 2.0, 0.7, 0.1, 
+                           help="Higher = more creative")
+    top_k = st.slider("Top-K", 10, 100, 50, 10,
+                     help="Number of top tokens to consider")
+    max_length = st.slider("Max Length", 20, 256, 100, 10,
+                          help="Maximum tokens to generate")
+    
+    st.divider()
+    
+    # Load model and show stats
+    model, tokenizer, device, config = load_model(models[st.session_state.selected_model])
+    
+    if model and config:
+        st.subheader("📊 Model Stats")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Parameters", f"{config.get('parameter_count', 0):,}")
+            st.metric("Layers", config.get('num_layers', 0))
+            st.metric("Dimension", config.get('d_model', 0))
+        with col2:
+            st.metric("Vocab Size", f"{config.get('vocab_size', 0):,}")
+            st.metric("Max Length", config.get('max_seq_len', 0))
+            st.metric("Device", str(device).upper())
+        
+        st.info(f"🤗 **Repo:** {os.environ.get('HF_REPO', 'N/A')}")
+    
+    st.divider()
+    
+    # Session stats
+    st.subheader("💬 Session")
+    st.metric("Messages", len(st.session_state.messages))
+    
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
-if st.button("Clear Chat"):
-    st.session_state.messages = []
-    st.rerun()
+# Main area
+st.title("✨ Dinesh AI")
+st.caption("Custom GPT trained from scratch • Continuously learning")
 
-st.markdown("---")
-
-# Load model
-model, tokenizer, device = load_model(models[st.session_state.selected_model])
+st.divider()
 
 # Display messages
-for msg in st.session_state.messages:
-    if msg['role'] == 'user':
-        st.markdown(f'<div class="msg user">👤 {msg["content"]}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="msg bot">✨ {msg["content"]}</div>', unsafe_allow_html=True)
+if not st.session_state.messages:
+    st.markdown("### 👋 Hello! Ask me anything")
+    col1, col2, col3 = st.columns(3)
+    
+    examples = [
+        ("🤖", "What is AI?", "What is artificial intelligence?"),
+        ("🌍", "Science", "Tell me about quantum physics"),
+        ("💻", "Technology", "How does blockchain work?")
+    ]
+    
+    for col, (icon, title, prompt) in zip([col1, col2, col3], examples):
+        with col:
+            if st.button(f"{icon} **{title}**", use_container_width=True, key=f"ex_{title}"):
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                st.rerun()
+else:
+    for msg in st.session_state.messages:
+        if msg['role'] == 'user':
+            st.markdown(f'<div class="msg user">👤 **You:** {msg["content"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="msg bot">✨ **Dinesh AI:** {msg["content"]}</div>', unsafe_allow_html=True)
 
 # Input
-if not st.session_state.messages:
-    st.markdown("### Ask me anything")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("🤖 What is AI?"):
-            st.session_state.messages.append({"role": "user", "content": "What is artificial intelligence?"})
-            st.rerun()
-    with col2:
-        if st.button("🌍 Science"):
-            st.session_state.messages.append({"role": "user", "content": "Tell me about science"})
-            st.rerun()
-    with col3:
-        if st.button("💻 Tech"):
-            st.session_state.messages.append({"role": "user", "content": "Explain technology"})
-            st.rerun()
+st.divider()
+col1, col2 = st.columns([6, 1])
 
-user_input = st.text_input("Type your message", key="input", label_visibility="collapsed")
+with col1:
+    user_input = st.text_input("Type your message", key="input", label_visibility="collapsed", 
+                               placeholder="Ask me anything...")
 
-if st.button("Send") and user_input and model:
+with col2:
+    send = st.button("Send", use_container_width=True, type="primary")
+
+if send and user_input and model:
     st.session_state.messages.append({"role": "user", "content": user_input})
     
     with st.spinner("Thinking..."):
@@ -164,11 +231,20 @@ if st.button("Send") and user_input and model:
             input_tensor = torch.tensor([input_ids], dtype=torch.long).to(device)
             
             with torch.no_grad():
-                output_ids = model.generate(input_tensor, max_length=min(128, model.max_seq_len),
-                                          temperature=0.7, top_p=0.9, top_k=50, eos_token_id=2)
+                output_ids = model.generate(input_tensor, max_length=min(max_length, model.max_seq_len),
+                                          temperature=temperature, top_p=0.9, top_k=top_k, eos_token_id=2)
             
             text = tokenizer.decode(output_ids[0].cpu().tolist()).replace('Ġ', ' ').strip()
             st.session_state.messages.append({"role": "assistant", "content": text})
         except Exception as e:
             st.session_state.messages.append({"role": "assistant", "content": f"Error: {str(e)}"})
     st.rerun()
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #999; font-size: 0.9rem;'>
+    Dinesh AI © 2026 • <a href='https://github.com/dineshCodeWorld/DINESH-AI' style='color: #667eea;'>GitHub</a> • 
+    <a href='https://huggingface.co/alien-x/dinesh-ai' style='color: #667eea;'>Hugging Face</a>
+</div>
+""", unsafe_allow_html=True)
