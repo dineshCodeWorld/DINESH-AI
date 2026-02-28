@@ -1,7 +1,7 @@
-streamlit>=1.20.0
-torch>=2.0.0,<2.2.0
-tokenizers>=0.13.0
-transformers>=4.30.0
-huggingface_hub>=0.20.0
-pyyaml>=6.0
-requests>=2.28.0
+streamlit
+torch
+tokenizers
+transformers
+huggingface_hub
+pyyaml
+requests
