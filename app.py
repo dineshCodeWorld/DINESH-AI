@@ -17,7 +17,7 @@ st.set_page_config(page_title="Dinesh AI", page_icon="✨", layout="wide", initi
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'selected_model' not in st.session_state:
-    st.session_state.selected_model = 'Latest'
+    st.session_state.selected_model = '🆕 Latest (Now)'
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = True
 
@@ -69,16 +69,35 @@ def get_models():
             return {"Latest": "dinesh_ai_model.pth"}
         
         commits = list(list_repo_commits(repo_id=repo_id))
-        models = {"Latest": "dinesh_ai_model.pth"}
+        models = {"🆕 Latest (Now)": "dinesh_ai_model.pth"}
         
-        for commit in commits[:20]:  # Show last 20 versions
-            date = commit.created_at.strftime("%Y-%m-%d %H:%M")
-            models[f"{date} ({commit.commit_id[:7]})"] = f"dinesh_ai_model.pth?revision={commit.commit_id}"
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        
+        for i, commit in enumerate(commits[:20], 1):
+            date = commit.created_at
+            age_days = (now - date).days
+            
+            # Friendly time labels
+            if age_days == 0:
+                time_label = "Today"
+            elif age_days == 1:
+                time_label = "Yesterday"
+            elif age_days < 7:
+                time_label = f"{age_days} days ago"
+            elif age_days < 30:
+                time_label = f"{age_days // 7} weeks ago"
+            else:
+                time_label = f"{age_days // 30} months ago"
+            
+            # Format: "Version 1 - 3 days ago (Feb 28)"
+            label = f"Version {i} - {time_label} ({date.strftime('%b %d')})"
+            models[label] = f"dinesh_ai_model.pth?revision={commit.commit_id}"
         
         return models
     except Exception as e:
         st.sidebar.error(f"Error: {e}")
-        return {"Latest": "dinesh_ai_model.pth"}
+        return {"🆕 Latest (Now)": "dinesh_ai_model.pth"}
 
 @st.cache_resource
 def load_model(model_file: str):
@@ -134,8 +153,9 @@ with st.sidebar:
     # Model selector
     st.subheader("🤖 Model")
     models = get_models()
-    selected = st.selectbox("Version", list(models.keys()), 
-                           index=list(models.keys()).index(st.session_state.selected_model))
+    selected = st.selectbox("Choose Version", list(models.keys()), 
+                           index=list(models.keys()).index(st.session_state.selected_model) if st.session_state.selected_model in models else 0,
+                           help="Newer versions are at the top")
     if selected != st.session_state.selected_model:
         st.session_state.selected_model = selected
         st.cache_resource.clear()
