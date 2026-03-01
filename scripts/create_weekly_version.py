@@ -25,8 +25,15 @@ def get_next_version_number(api, repo_id, token):
         return 1
 
 def find_latest_model():
-    """Find the most recently created model directory"""
+    """Find the downloaded model from HF"""
     models_dir = Path("models")
+    
+    # Check for downloaded model first
+    model_file = models_dir / "dinesh_ai_model.pth"
+    if model_file.exists():
+        return model_file
+    
+    # Fallback: find most recent trained model
     if not models_dir.exists():
         raise FileNotFoundError("Models directory not found")
     
@@ -36,7 +43,6 @@ def find_latest_model():
     if not model_dirs:
         raise FileNotFoundError("No trained model found in models/")
     
-    # Get most recent by modification time
     latest = max(model_dirs, key=lambda x: x.stat().st_mtime)
     model_file = latest / "model.pt"
     
