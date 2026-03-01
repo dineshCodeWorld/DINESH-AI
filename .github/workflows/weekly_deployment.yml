@@ -57,7 +57,7 @@ jobs:
           
           Date: ${{ github.event.repository.updated_at }}
           Model: ${{ secrets.HF_REPO }}
-          App: https://dinesh-ai.streamlit.app
+          App: https://dineshcodeworld-dinesh-ai.streamlit.app
           
           Latest version has been deployed and is now live.
           
