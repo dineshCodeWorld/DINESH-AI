@@ -93,23 +93,43 @@ class SimpleTokenizer:
             ])
             self.tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel()
             
-            # CRITICAL FIX: Train on data file with proper settings
+            # CRITICAL FIX: Read file and create iterator
+            def batch_iterator(file_path, batch_size=1000):
+                """Yield batches of text for tokenizer training"""
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    batch = []
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            batch.append(line)
+                            if len(batch) >= batch_size:
+                                yield batch
+                                batch = []
+                    if batch:
+                        yield batch
+            
+            # Train with proper settings
             trainer = trainers.BpeTrainer(
-                vocab_size=self.vocab_size,  # MUST pass vocab_size to trainer!
-                min_frequency=2,  # Lower threshold for merges
+                vocab_size=self.vocab_size,
+                min_frequency=2,
                 show_progress=True,
                 special_tokens=["<pad>", "<unk>", "<eos>", "<bos>"],
-                initial_alphabet=pre_tokenizers.ByteLevel.alphabet()  # Start with byte-level alphabet
+                initial_alphabet=pre_tokenizers.ByteLevel.alphabet()
             )
             
-            self.tokenizer.train([data_file], trainer=trainer)
+            # Train from iterator instead of file
+            self.tokenizer.train_from_iterator(batch_iterator(data_file), trainer=trainer, length=None)
             self.tokenizer.post_processor = processors.ByteLevel(trim_offsets=True)
             
             actual_vocab = self.tokenizer.get_vocab_size()
             logger.info(f"Tokenizer training completed: {actual_vocab} tokens learned")
             
             if actual_vocab < 1000:
-                logger.warning(f"⚠️ Tokenizer only learned {actual_vocab} tokens - data might be too small or min_frequency too high")
+                logger.warning(f"⚠️ Tokenizer only learned {actual_vocab} tokens - data might be too small")
+            elif actual_vocab < 5000:
+                logger.info(f"✓ Tokenizer learned {actual_vocab} tokens (moderate vocabulary)")
+            else:
+                logger.info(f"✓ Tokenizer learned {actual_vocab} tokens (good vocabulary!)")
             
         except Exception as e:
             logger.error(f"Error training tokenizer: {str(e)}")
