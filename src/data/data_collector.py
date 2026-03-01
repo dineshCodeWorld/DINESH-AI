@@ -20,6 +20,12 @@ try:
 except ImportError:
     WANDB_AVAILABLE = False
 
+try:
+    from datasets import load_dataset
+    DATASETS_AVAILABLE = True
+except ImportError:
+    DATASETS_AVAILABLE = False
+
 logging.basicConfig(**LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
@@ -443,6 +449,59 @@ class DataCollector:
             logger.error(f"Error collecting from HackerNews: {str(e)}")
             return stories
     
+    def collect_from_openwebtext(self, limit: int = 100) -> List[Dict]:
+        """Collect diverse web text from OpenWebText dataset (streaming)"""
+        logger.info(f"Starting OpenWebText data collection (target: {limit})...")
+        texts = []
+        
+        if not DATASETS_AVAILABLE:
+            logger.warning("datasets library not available, skipping OpenWebText")
+            return texts
+        
+        try:
+            # Stream dataset to avoid downloading entire 38GB
+            dataset = load_dataset("openwebtext", split="train", streaming=True)
+            
+            # Skip random offset for variety
+            skip_count = random.randint(0, 10000)
+            dataset = dataset.skip(skip_count)
+            
+            for idx, item in enumerate(dataset):
+                if len(texts) >= limit:
+                    break
+                
+                content = item.get('text', '')
+                
+                # Quality filters
+                if len(content) < 200 or len(content) > 10000:
+                    continue
+                if not self._is_duplicate(content):
+                    # Extract title from first line or first 100 chars
+                    title = content.split('\n')[0][:100] if '\n' in content else content[:100]
+                    
+                    texts.append({
+                        "source": "openwebtext",
+                        "title": title,
+                        "content": content[:5000],
+                        "url": "",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    
+                    if len(texts) % 20 == 0:
+                        logger.info(f"Progress: {len(texts)}/{limit} texts")
+                    if self.writer and len(texts) % 10 == 0:
+                        self.writer.add_scalar('DataCollection/OpenWebText', len(texts), self.collection_step)
+                        self.collection_step += 1
+                    if WANDB_AVAILABLE and wandb.run and len(texts) % 10 == 0:
+                        wandb.log({"collection/openwebtext": len(texts)})
+            
+            logger.info(f"Collected {len(texts)} OpenWebText samples")
+            return texts
+            
+        except Exception as e:
+            logger.error(f"Error collecting from OpenWebText: {str(e)}")
+            return texts
+    
     def collect_from_common_crawl(self, limit: int = 50) -> List[Dict]:
         """Collect from RSS News feeds"""
         logger.info(f"Starting News RSS data collection (target: {limit})...")
@@ -556,7 +615,8 @@ class DataCollector:
                 "gutenberg": 10,
                 "reddit": 100,
                 "hackernews": 50,
-                "news": 50
+                "news": 50,
+                "openwebtext": 100
             }
         
         all_data = []
@@ -591,6 +651,11 @@ class DataCollector:
             self.collection_step += 1
             
         all_data.extend(self.collect_from_common_crawl(limits.get("news", 50)))
+        if self.writer:
+            self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
+            self.collection_step += 1
+            
+        all_data.extend(self.collect_from_openwebtext(limits.get("openwebtext", 100)))
         if self.writer:
             self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
             self.writer.add_scalar('DataCollection/DuplicatesFiltered', len(self.seen_hashes) - len(all_data), self.collection_step)

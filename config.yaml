@@ -132,6 +132,13 @@ data_sources:
     enabled: true
     limit: 50                  # News articles from RSS feeds
     rate_limit_delay: 2.0      # Seconds between feeds
+  
+  # OpenWebText (Diverse Web Content)
+  openwebtext:
+    enabled: true
+    limit: 500                 # High-quality web text (GPT-2 dataset)
+    min_length: 200            # Minimum text length
+    max_length: 10000          # Maximum text length
 
 # ==================== CONTINUOUS LEARNING ====================
 continuous:
