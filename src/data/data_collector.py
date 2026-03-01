@@ -139,7 +139,7 @@ class DataCollector:
                                     if self.writer and len(articles) % 10 == 0:
                                         self.writer.add_scalar('DataCollection/Wikipedia', len(articles), self.collection_step)
                                         self.collection_step += 1
-                                    if WANDB_AVAILABLE and len(articles) % 10 == 0:
+                                    if WANDB_AVAILABLE and wandb.run and len(articles) % 10 == 0:
                                         wandb.log({"collection/wikipedia": len(articles)})
                 else:
                     logger.error(f"Wikipedia API returned status {response.status_code}")
@@ -219,7 +219,7 @@ class DataCollector:
                 if self.writer and len(papers) % 10 == 0:
                     self.writer.add_scalar('DataCollection/ArXiv', len(papers), self.collection_step)
                     self.collection_step += 1
-                if WANDB_AVAILABLE and len(papers) % 10 == 0:
+                if WANDB_AVAILABLE and wandb.run and len(papers) % 10 == 0:
                     wandb.log({"collection/arxiv": len(papers)})
             
             logger.info(f"Collected {len(papers)} ArXiv papers")
@@ -543,7 +543,7 @@ class DataCollector:
             self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
             self.writer.add_scalar('DataCollection/DuplicatesFiltered', len(self.seen_hashes) - len(all_data), self.collection_step)
             self.collection_step += 1
-        if WANDB_AVAILABLE:
+        if WANDB_AVAILABLE and wandb.run:
             wandb.log({"collection/total": len(all_data), "collection/duplicates": len(self.seen_hashes) - len(all_data)})
         
         # Save seen hashes for future deduplication

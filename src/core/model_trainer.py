@@ -296,7 +296,7 @@ class ModelTrainer:
                     if self.writer and global_step % 10 == 0:
                         self.writer.add_scalar('Loss/train', loss.item(), global_step)
                         self.writer.add_scalar('Learning_Rate', scheduler.get_last_lr()[0], global_step)
-                    if WANDB_AVAILABLE and global_step % 10 == 0:
+                    if WANDB_AVAILABLE and wandb.run and global_step % 10 == 0:
                         wandb.log({"train/loss": loss.item(), "train/lr": scheduler.get_last_lr()[0], "train/step": global_step})
                     
                     overall_progress = (global_step / total_steps) * 100
@@ -317,7 +317,7 @@ class ModelTrainer:
                         
                         if self.writer:
                             self.writer.add_scalar('Metrics/perplexity', perplexity, global_step)
-                        if WANDB_AVAILABLE:
+                        if WANDB_AVAILABLE and wandb.run:
                             wandb.log({"metrics/perplexity": perplexity, "train/step": global_step})
                         
                         if perplexity < best_perplexity:
@@ -331,7 +331,7 @@ class ModelTrainer:
                         
                         if self.writer:
                             self.writer.add_scalar('Metrics/vocab_match', metrics.get('avg_vocab_match_ratio', 0), global_step)
-                        if WANDB_AVAILABLE:
+                        if WANDB_AVAILABLE and wandb.run:
                             wandb.log({"metrics/vocab_match": metrics.get('avg_vocab_match_ratio', 0), "train/step": global_step})
                     
                     if (batch_idx + 1) % TRAINING_CONFIG.get("save_interval", 500) == 0:
