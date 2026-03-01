@@ -120,27 +120,37 @@ def load_model(model_info: dict):
         tokenizer_path = hf_hub_download(repo_id=repo_id, filename="tokenizer.json", cache_dir="models", revision=revision)
         config_path = hf_hub_download(repo_id=repo_id, filename="model_config.json", cache_dir="models", revision=revision)
         
-        # Load config from the specific revision
+        # Load config
         with open(config_path) as f:
             config = json.load(f)
+        
+        # Load model state to get actual architecture
+        state_dict = torch.load(model_path, map_location="cpu", weights_only=True)
+        actual_vocab_size = state_dict['token_embedding.weight'].shape[0]
+        actual_max_seq_len = state_dict['positional_embedding.weight'].shape[0]
         
         tokenizer = Tokenizer.from_file(tokenizer_path)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Create model with config from that specific version
+        # Create model with actual architecture from state_dict
         model = CustomGPT(
-            vocab_size=config["vocab_size"],
+            vocab_size=actual_vocab_size,
             d_model=config["d_model"],
             num_layers=config["num_layers"],
             num_heads=config.get("num_heads", config["d_model"] // 64),
             d_ff=config.get("d_ff", config["d_model"] * 4),
-            max_seq_len=config["max_seq_len"],
+            max_seq_len=actual_max_seq_len,
             device=str(device)
         )
         
-        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+        model.load_state_dict(state_dict)
         model.to(device)
         model.eval()
+        
+        # Update config with actual values
+        config["vocab_size"] = actual_vocab_size
+        config["max_seq_len"] = actual_max_seq_len
+        
         return model, tokenizer, device, config
     except Exception as e:
         st.error(f"Error loading model: {e}")
