@@ -18,6 +18,12 @@ except ImportError:
     METRICS_AVAILABLE = False
     logger.warning("Metrics tracker not available")
 
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+
 logging.basicConfig(**LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
@@ -173,13 +179,22 @@ class ModelTrainer:
     def create_tokenizer_and_model(self, data_file: str):
         """Train tokenizer and create model from scratch"""
         try:
-            # Train tokenizer
+            # Train tokenizer with TensorBoard logging
             logger.info("Creating and training tokenizer...")
+            if self.writer:
+                self.writer.add_text('Training/Stage', 'Tokenizer Training', 0)
+            
             self.tokenizer = SimpleTokenizer(vocab_size=MODEL_CONFIG.get("vocab_size", 50000))
             self.tokenizer.train(data_file)
             
+            if self.writer:
+                self.writer.add_scalar('Tokenizer/VocabSize', self.tokenizer.vocab_size, 0)
+            
             # Create model from scratch
             logger.info("Creating custom GPT model from scratch...")
+            if self.writer:
+                self.writer.add_text('Training/Stage', 'Model Creation', 1)
+            
             self.model = CustomGPT(
                 vocab_size=self.tokenizer.vocab_size,
                 d_model=MODEL_CONFIG.get("d_model", 768),
@@ -195,6 +210,10 @@ class ModelTrainer:
             param_count = self.model.count_parameters()
             logger.info(f"Model created with {param_count:,} parameters")
             logger.info(f"Tokenizer vocab size: {self.tokenizer.vocab_size}")
+            
+            if self.writer:
+                self.writer.add_scalar('Model/Parameters', param_count, 0)
+                self.writer.add_scalar('Model/Layers', MODEL_CONFIG.get("num_layers", 12), 0)
             
         except Exception as e:
             logger.error(f"Error creating tokenizer and model: {str(e)}")
@@ -273,10 +292,12 @@ class ModelTrainer:
                     epoch_loss += loss.item()
                     global_step += 1
                     
-                    # TensorBoard logging
+                    # TensorBoard + W&B logging
                     if self.writer and global_step % 10 == 0:
                         self.writer.add_scalar('Loss/train', loss.item(), global_step)
                         self.writer.add_scalar('Learning_Rate', scheduler.get_last_lr()[0], global_step)
+                    if WANDB_AVAILABLE and global_step % 10 == 0:
+                        wandb.log({"train/loss": loss.item(), "train/lr": scheduler.get_last_lr()[0], "train/step": global_step})
                     
                     overall_progress = (global_step / total_steps) * 100
                     elapsed = (datetime.now() - training_start).total_seconds()
@@ -296,6 +317,8 @@ class ModelTrainer:
                         
                         if self.writer:
                             self.writer.add_scalar('Metrics/perplexity', perplexity, global_step)
+                        if WANDB_AVAILABLE:
+                            wandb.log({"metrics/perplexity": perplexity, "train/step": global_step})
                         
                         if perplexity < best_perplexity:
                             best_perplexity = perplexity
@@ -308,6 +331,8 @@ class ModelTrainer:
                         
                         if self.writer:
                             self.writer.add_scalar('Metrics/vocab_match', metrics.get('avg_vocab_match_ratio', 0), global_step)
+                        if WANDB_AVAILABLE:
+                            wandb.log({"metrics/vocab_match": metrics.get('avg_vocab_match_ratio', 0), "train/step": global_step})
                     
                     if (batch_idx + 1) % TRAINING_CONFIG.get("save_interval", 500) == 0:
                         self._save_checkpoint(output_dir, epoch, global_step)

@@ -11,3 +11,4 @@ datasets
 numpy
 nltk
 tensorboard
+wandb

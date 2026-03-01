@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import yaml
+import os
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
@@ -14,8 +15,15 @@ from src.data.data_preprocessor import DataPreprocessor
 from src.core.model_trainer import ModelTrainer
 from src.deployment.model_deployer import ModelDeployer
 
+# Initialize W&B if available
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+
 # Load configuration from config.yaml
-with open(project_root / 'config.yaml', 'r') as f:
+with open(project_root / 'config.yaml', 'r', encoding='utf-8') as f:
     yaml_config = yaml.safe_load(f)
 
 DATA_DIR = project_root / "data"
@@ -34,7 +42,30 @@ logger = logging.getLogger(__name__)
 
 class TrainingPipeline:
     def __init__(self):
-        self.data_collector = DataCollector()
+        # Initialize W&B for cloud monitoring
+        self.wandb_run = None
+        if WANDB_AVAILABLE and os.environ.get('WANDB_API_KEY'):
+            try:
+                self.wandb_run = wandb.init(
+                    project="dinesh-ai",
+                    name=f"train_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    tags=["github-actions"] if os.environ.get('GITHUB_ACTIONS') else ["local"],
+                    config=yaml_config
+                )
+                logger.info(f"✓ W&B enabled: {self.wandb_run.url}")
+            except Exception as e:
+                logger.warning(f"W&B init failed: {e}")
+        
+        # Initialize TensorBoard writer
+        self.writer = None
+        try:
+            from torch.utils.tensorboard import SummaryWriter
+            self.writer = SummaryWriter(log_dir='runs')
+            logger.info("TensorBoard enabled: tensorboard --logdir=runs")
+        except ImportError:
+            logger.warning("TensorBoard not available")
+        
+        self.data_collector = DataCollector(writer=self.writer)
         self.preprocessor = DataPreprocessor()
         self.trainer = ModelTrainer()
         self.deployer = ModelDeployer()
@@ -51,6 +82,9 @@ class TrainingPipeline:
         try:
             # Step 1: Collect data (10% of total time)
             logger.info("\n[STEP 1/5] Collecting data from sources... (Progress: 0%)")
+            if self.writer:
+                self.writer.add_text('Pipeline/Stage', 'Data Collection Started', 0)
+            
             if collect_limits is None:
                 collect_limits = {
                     "wikipedia": 1000,
@@ -69,8 +103,14 @@ class TrainingPipeline:
             logger.info(f"✓ Data collection completed: {collected_file}")
             logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s | Progress: 10%")
             
+            if self.wandb_run:
+                wandb.log({"pipeline/progress": 10, "pipeline/stage": "data_collection"})
+            
             # Step 2: Preprocess data (5% of total time)
             logger.info("\n[STEP 2/5] Preprocessing collected data... (Progress: 10%)")
+            if self.writer:
+                self.writer.add_text('Pipeline/Stage', 'Data Preprocessing', 1)
+            
             collected_data = self.preprocessor.load_collected_data(collected_file)
             processed_data = self.preprocessor.preprocess_data(collected_data)
             
@@ -97,8 +137,15 @@ class TrainingPipeline:
             logger.info(f"✓ Data preprocessing completed: {len(processed_data)} samples")
             logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s | Progress: 15%")
             
+            if self.wandb_run:
+                wandb.log({"pipeline/progress": 15, "data/samples": len(processed_data)})
+            
             # Step 3: Convert to text format (5% of total time)
             logger.info("\n[STEP 3/5] Preparing training data... (Progress: 15%)")
+            if self.writer:
+                self.writer.add_text('Pipeline/Stage', 'Training Data Preparation', 2)
+                self.writer.add_scalar('Data/TotalSamples', len(processed_data), 0)
+            
             text_file = DATA_DIR / "training_data.txt"
             with open(text_file, 'w', encoding='utf-8') as f:
                 for item in processed_data:
@@ -107,6 +154,9 @@ class TrainingPipeline:
             elapsed = (datetime.now() - pipeline_start).total_seconds()
             logger.info(f"✓ Training data prepared: {text_file}")
             logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s | Progress: 20%")
+            
+            if self.wandb_run:
+                wandb.log({"pipeline/progress": 20})
             
             # Step 4: Download latest model for fine-tuning (75% of total time)
             logger.info("\n[STEP 4/6] Downloading latest model from Hugging Face... (Progress: 20%)")
@@ -197,6 +247,9 @@ class TrainingPipeline:
             logger.info(f"✓ Model training completed: {model_output_dir}")
             logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s ({elapsed/60:.1f} min) | Progress: 95%")
             
+            if self.wandb_run:
+                wandb.log({"pipeline/progress": 95})
+            
             # Step 6: Prepare for deployment (5% of total time)
             logger.info("\n[STEP 6/6] Preparing for deployment... (Progress: 95%)")
             version = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -258,6 +311,13 @@ class TrainingPipeline:
             logger.info(f"📊 Model version: {version}")
             logger.info(f"📊 Data samples: {len(processed_data)}")
             logger.info(f"📄 Pipeline log: {log_file}")
+            
+            if self.wandb_run:
+                wandb.log({"pipeline/progress": 100, "pipeline/total_time": total_time})
+                wandb.finish()
+            
+            if self.writer:
+                self.writer.close()
             
             return pipeline_summary
             

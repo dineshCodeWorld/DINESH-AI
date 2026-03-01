@@ -11,18 +11,27 @@ import random
 import hashlib
 import time
 import re
+from torch.utils.tensorboard import SummaryWriter
 from ..config_loader import DATA_DIR, DATA_SOURCES, LOGGING_CONFIG
+
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
 
 logging.basicConfig(**LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
 class DataCollector:
-    def __init__(self):
+    def __init__(self, writer: SummaryWriter = None):
         self.data_dir = DATA_DIR
         self.data_dir.mkdir(exist_ok=True)
         self.collected_data = []
         self.seen_hashes_file = self.data_dir / "seen_content_hashes.json"
         self.seen_hashes = self._load_seen_hashes()
+        self.writer = writer
+        self.collection_step = 0
         
         # Load config values
         self.user_agent = DATA_SOURCES.get('user_agent', 'DineshAI/1.0')
@@ -127,6 +136,11 @@ class DataCollector:
                                     })
                                     if len(articles) % 50 == 0:
                                         logger.info(f"Progress: {len(articles)}/{limit} articles")
+                                    if self.writer and len(articles) % 10 == 0:
+                                        self.writer.add_scalar('DataCollection/Wikipedia', len(articles), self.collection_step)
+                                        self.collection_step += 1
+                                    if WANDB_AVAILABLE and len(articles) % 10 == 0:
+                                        wandb.log({"collection/wikipedia": len(articles)})
                 else:
                     logger.error(f"Wikipedia API returned status {response.status_code}")
                     break
@@ -202,6 +216,11 @@ class DataCollector:
                                 
                 if len(papers) % 50 == 0 and len(papers) > 0:
                     logger.info(f"Progress: {len(papers)}/{limit} papers")
+                if self.writer and len(papers) % 10 == 0:
+                    self.writer.add_scalar('DataCollection/ArXiv', len(papers), self.collection_step)
+                    self.collection_step += 1
+                if WANDB_AVAILABLE and len(papers) % 10 == 0:
+                    wandb.log({"collection/arxiv": len(papers)})
             
             logger.info(f"Collected {len(papers)} ArXiv papers")
             return papers
@@ -282,6 +301,9 @@ class DataCollector:
                 else:
                     break
             
+            if self.writer:
+                self.writer.add_scalar('DataCollection/Gutenberg', len(texts), self.collection_step)
+                self.collection_step += 1
             logger.info(f"Collected {len(texts)} Gutenberg texts")
             return texts
             
@@ -336,6 +358,9 @@ class DataCollector:
                     logger.warning(f"Error fetching r/{subreddit}: {e}")
                     continue
             
+            if self.writer:
+                self.writer.add_scalar('DataCollection/Reddit', len(posts), self.collection_step)
+                self.collection_step += 1
             logger.info(f"Collected {len(posts)} Reddit posts")
             return posts
             
@@ -383,6 +408,9 @@ class DataCollector:
                                 "timestamp": datetime.now().isoformat()
                             })
             
+            if self.writer:
+                self.writer.add_scalar('DataCollection/HackerNews', len(stories), self.collection_step)
+                self.collection_step += 1
             logger.info(f"Collected {len(stories)} HackerNews stories")
             return stories
             
@@ -444,6 +472,9 @@ class DataCollector:
                     logger.warning(f"Error fetching feed: {e}")
                     continue
             
+            if self.writer:
+                self.writer.add_scalar('DataCollection/News', len(articles), self.collection_step)
+                self.collection_step += 1
             logger.info(f"Collected {len(articles)} news articles")
             return articles
             
@@ -477,13 +508,43 @@ class DataCollector:
             }
         
         all_data = []
+        total_target = sum(limits.values())
+        
+        if self.writer:
+            self.writer.add_scalar('DataCollection/TotalTarget', total_target, 0)
         
         all_data.extend(self.collect_from_wikipedia_api(limits.get("wikipedia", 50)))
+        if self.writer:
+            self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
+            self.collection_step += 1
+            
         all_data.extend(self.collect_from_arxiv(limits.get("arxiv", 30)))
+        if self.writer:
+            self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
+            self.collection_step += 1
+            
         all_data.extend(self.collect_from_gutenberg(limits.get("gutenberg", 10)))
+        if self.writer:
+            self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
+            self.collection_step += 1
+            
         all_data.extend(self.collect_from_reddit(limits.get("reddit", 100)))
+        if self.writer:
+            self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
+            self.collection_step += 1
+            
         all_data.extend(self.collect_from_hackernews(limits.get("hackernews", 50)))
+        if self.writer:
+            self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
+            self.collection_step += 1
+            
         all_data.extend(self.collect_from_common_crawl(limits.get("news", 50)))
+        if self.writer:
+            self.writer.add_scalar('DataCollection/TotalCollected', len(all_data), self.collection_step)
+            self.writer.add_scalar('DataCollection/DuplicatesFiltered', len(self.seen_hashes) - len(all_data), self.collection_step)
+            self.collection_step += 1
+        if WANDB_AVAILABLE:
+            wandb.log({"collection/total": len(all_data), "collection/duplicates": len(self.seen_hashes) - len(all_data)})
         
         # Save seen hashes for future deduplication
         self._save_seen_hashes()

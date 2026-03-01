@@ -39,7 +39,7 @@ def load_config():
     if not CONFIG_FILE.exists():
         raise FileNotFoundError(f"Config file not found: {CONFIG_FILE}")
     
-    with open(CONFIG_FILE, 'r') as f:
+    with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     
     if config is None:

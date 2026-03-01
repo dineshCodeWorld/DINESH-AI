@@ -10,13 +10,14 @@
 - ✅ Free model storage (Hugging Face)
 - ✅ Centralized configuration (config.yaml)
 - ✅ Optimized for human-like responses
+- ✅ **Live training dashboard (W&B) - Monitor from anywhere!**
 - ✅ $0/month cost
 
 ## 🚀 Quick Setup
 
 ### Required Accounts
 
-You need to create 4 accounts/tokens:
+You need to create 5 accounts/tokens:
 
 #### 1. Hugging Face Token (Model Storage)
 ```
@@ -52,17 +53,27 @@ You need to create 4 accounts/tokens:
 3. No token needed
 ```
 
+#### 5. Weights & Biases (Live Monitoring) - OPTIONAL
+```
+1. Go to: https://wandb.ai/signup
+2. Sign up (free)
+3. Go to: https://wandb.ai/authorize
+4. Copy API key: wandb_xxxxxxxxxxxxx
+5. See WANDB_SETUP.md for full guide
+```
+
 ### Setup Steps
 
 #### Step 1: Add GitHub Secrets
 ```
 Go to: https://github.com/yourusername/Dinesh-AI/settings/secrets/actions
 
-Add these 4 secrets:
+Add these secrets:
 1. HF_TOKEN = hf_xxxxxxxxxxxxx (from Hugging Face)
 2. HF_REPO = yourusername/dinesh-ai
 3. EMAIL_USERNAME = dineshganji372@gmail.com
 4. EMAIL_PASSWORD = xxxx xxxx xxxx xxxx (Gmail app password)
+5. WANDB_API_KEY = wandb_xxxxxxxxxxxxx (optional - for live monitoring)
 ```
 
 #### Step 2: Push Code
@@ -121,11 +132,13 @@ git push
 
 ## 📊 Monitoring
 
+- **Live Training Dashboard**: https://wandb.ai/yourusername/dinesh-ai (W&B)
 - **Training Logs**: GitHub → Actions → Continuous Training
 - **Deployment Logs**: GitHub → Actions → Weekly Deployment
 - **Model Versions**: https://huggingface.co/yourusername/dinesh-ai
 - **Live App**: https://yourusername-dinesh-ai.streamlit.app
 - **Email**: Check dineshganji372@gmail.com every Sunday
+- **Local TensorBoard**: `tensorboard --logdir=runs`
 
 ## 📧 Email Notifications
 
@@ -143,6 +156,7 @@ You'll receive emails with:
 | Hugging Face | Unlimited storage | $0 |
 | Streamlit Cloud | 1 app | $0 |
 | Gmail | Unlimited emails | $0 |
+| W&B | Unlimited runs (public) | $0 |
 | **Total** | | **$0/month** |
 
 ## 🎉 What You Get
@@ -153,11 +167,14 @@ You'll receive emails with:
 4. **Email Alerts**: Know when deployed
 5. **Version History**: All models saved
 6. **Zero Maintenance**: Fully automated
+7. **Live Dashboard**: Monitor training from anywhere (W&B)
 
 ## 📚 Documentation
 
 - `PROJECT_SUMMARY.md` - Complete project overview and architecture
 - `SETUP_CHECKLIST.md` - Step-by-step setup guide
+- `WANDB_SETUP.md` - Live monitoring setup (5 minutes)
+- `TENSORBOARD_GUIDE.md` - Local visualization guide
 - `config.yaml` - Central configuration file (all settings)
 - `docs/` - Detailed documentation (13 guides)
 
@@ -178,7 +195,10 @@ All settings are in `config.yaml`:
 - GitHub Secrets: https://github.com/yourusername/Dinesh-AI/settings/secrets/actions
 - Gmail App Passwords: https://myaccount.google.com/apppasswords
 - Streamlit Cloud: https://share.streamlit.io
+- W&B Dashboard: https://wandb.ai/yourusername/dinesh-ai
+- W&B API Key: https://wandb.ai/authorize
 - Project Summary: See `PROJECT_SUMMARY.md`
+- Live Monitoring Guide: See `WANDB_SETUP.md`
 
 ---
 
