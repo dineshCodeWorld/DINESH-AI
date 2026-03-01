@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '0 */6 * * *'  # Every 6 hours
   workflow_dispatch:  # Manual trigger
+    inputs:
+      skip_collection:
+        description: 'Skip data collection (use existing data)'
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -37,7 +43,13 @@ jobs:
         HF_REPO: ${{ secrets.HF_REPO }}
         WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
       run: |
-        python scripts/train.py
+        if [ "${{ github.event.inputs.skip_collection }}" = "true" ]; then
+          echo "Skipping data collection, using existing data"
+          python scripts/train.py --skip-collection
+        else
+          echo "Collecting new data and training"
+          python scripts/train.py
+        fi
     
     - name: Upload to Hugging Face
       env:

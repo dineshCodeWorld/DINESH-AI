@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 import yaml
 import os
+import os
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
@@ -118,6 +119,7 @@ class TrainingPipeline:
             if skip_collection:
                 logger.info("\n[STEP 2/5] Using existing preprocessed data... (Progress: 10%)")
                 # Check if existing data file exists
+                import json
                 existing_data_file = DATA_DIR / "all_training_data.json"
                 if not existing_data_file.exists():
                     logger.error("❌ No existing training data found! Cannot skip collection.")
