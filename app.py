@@ -72,16 +72,16 @@ def get_models():
         commits = list(list_repo_commits(repo_id=repo_id))
         commits.reverse()  # Oldest first
         
-        # Get file size
-        try:
-            repo_info = api.repo_info(repo_id=repo_id, files_metadata=True)
-            model_file_info = next((f for f in repo_info.siblings if f.rfilename == "dinesh_ai_model.pth"), None)
-            model_size_mb = model_file_info.size / (1024 * 1024) if model_file_info else 0
-        except:
-            model_size_mb = 0
-        
         models = {}
         for i, commit in enumerate(commits[:50]):
+            # Get file size for this specific commit
+            try:
+                files = api.list_repo_tree(repo_id=repo_id, revision=commit.commit_id)
+                model_file = next((f for f in files if f.path == "dinesh_ai_model.pth"), None)
+                size_mb = model_file.size / (1024 * 1024) if model_file and hasattr(model_file, 'size') else 0
+            except:
+                size_mb = 0
+            
             version = f"v0.{i}"
             if i == len(commits[:50]) - 1:
                 version += " (Latest)"
@@ -90,7 +90,7 @@ def get_models():
                 "date": commit.created_at.strftime("%Y-%m-%d %H:%M UTC"),
                 "commit": commit.commit_id[:8],
                 "message": commit.title,
-                "size": f"{model_size_mb:.1f} MB",
+                "size": f"{size_mb:.1f} MB" if size_mb > 0 else "N/A",
                 "filename": "dinesh_ai_model.pth"
             }
         
