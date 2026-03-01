@@ -115,16 +115,19 @@ def load_model(model_info: dict):
         if "?revision=" in model_file:
             model_file, revision = model_file.split("?revision=")
         
+        # Download all files from the same revision
         model_path = hf_hub_download(repo_id=repo_id, filename=model_file, cache_dir="models", revision=revision)
         tokenizer_path = hf_hub_download(repo_id=repo_id, filename="tokenizer.json", cache_dir="models", revision=revision)
         config_path = hf_hub_download(repo_id=repo_id, filename="model_config.json", cache_dir="models", revision=revision)
         
+        # Load config from the specific revision
         with open(config_path) as f:
             config = json.load(f)
         
         tokenizer = Tokenizer.from_file(tokenizer_path)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
+        # Create model with config from that specific version
         model = CustomGPT(
             vocab_size=config["vocab_size"],
             d_model=config["d_model"],
@@ -140,7 +143,7 @@ def load_model(model_info: dict):
         model.eval()
         return model, tokenizer, device, config
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error loading model: {e}")
         return None, None, None, None
 
 # Sidebar
