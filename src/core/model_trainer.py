@@ -86,40 +86,19 @@ class SimpleTokenizer:
             # Create BPE tokenizer
             self.tokenizer = Tokenizer(models.BPE())
             
-            # Tokenizers' normalizer and pre-tokenizer
-            self.tokenizer.normalizer = normalizers.Sequence([
-                normalizers.NFC(),
-                normalizers.Lowercase()
-            ])
-            self.tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel()
+            # NO normalizer or pre-tokenizer - let BPE work naturally
+            # This is the key fix!
             
-            # CRITICAL FIX: Read file and create iterator
-            def batch_iterator(file_path, batch_size=1000):
-                """Yield batches of text for tokenizer training"""
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    batch = []
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            batch.append(line)
-                            if len(batch) >= batch_size:
-                                yield batch
-                                batch = []
-                    if batch:
-                        yield batch
-            
-            # Train with proper settings
+            # Train with simple settings
             trainer = trainers.BpeTrainer(
                 vocab_size=self.vocab_size,
                 min_frequency=2,
                 show_progress=True,
-                special_tokens=["<pad>", "<unk>", "<eos>", "<bos>"],
-                initial_alphabet=pre_tokenizers.ByteLevel.alphabet()
+                special_tokens=["<pad>", "<unk>", "<eos>", "<bos>"]
             )
             
-            # Train from iterator instead of file
-            self.tokenizer.train_from_iterator(batch_iterator(data_file), trainer=trainer, length=None)
-            self.tokenizer.post_processor = processors.ByteLevel(trim_offsets=True)
+            # Train directly from file - simplest approach
+            self.tokenizer.train([data_file], trainer=trainer)
             
             actual_vocab = self.tokenizer.get_vocab_size()
             logger.info(f"Tokenizer training completed: {actual_vocab} tokens learned")
