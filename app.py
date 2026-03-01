@@ -156,13 +156,18 @@ with st.sidebar:
         index=versions.index(st.session_state.selected_model) if st.session_state.selected_model in versions else len(versions)-1
     )
     
+    if selected != st.session_state.selected_model:
+        st.session_state.selected_model = selected
+        st.cache_resource.clear()
+        st.rerun()
+    
     # Show version details
-    if selected in models:
+    if selected in models and isinstance(models[selected], dict):
         info = models[selected]
-        st.caption(f"📅 {info['date']}")
-        st.caption(f"🔖 Commit: {info['commit']}")
+        st.caption(f"📅 {info.get('date', 'N/A')}")
+        st.caption(f"🔖 Commit: {info.get('commit', 'N/A')}")
         with st.expander("📝 Details"):
-            st.text(f"Message: {info['message']}")
+            st.text(f"Message: {info.get('message', 'N/A')}")
             st.text(f"Repository: {os.environ.get('HF_REPO', 'N/A')}")
     if selected != st.session_state.selected_model:
         st.session_state.selected_model = selected
