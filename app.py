@@ -17,7 +17,7 @@ st.set_page_config(page_title="Dinesh AI", page_icon="✨", layout="wide", initi
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'selected_model' not in st.session_state:
-    st.session_state.selected_model = '🆕 Latest (Now)'
+    st.session_state.selected_model = None
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = True
 
@@ -66,45 +66,36 @@ def get_models():
         from huggingface_hub import list_repo_commits
         repo_id = os.environ.get('HF_REPO')
         if not repo_id:
-            return {"Latest": "dinesh_ai_model.pth"}
+            return {"v0.0": "dinesh_ai_model.pth"}
         
         commits = list(list_repo_commits(repo_id=repo_id))
-        models = {"🆕 Latest (Now)": "dinesh_ai_model.pth"}
+        commits.reverse()  # Oldest first
         
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
-        
-        for i, commit in enumerate(commits[:20], 1):
-            date = commit.created_at
-            age_days = (now - date).days
-            
-            # Friendly time labels
-            if age_days == 0:
-                time_label = "Today"
-            elif age_days == 1:
-                time_label = "Yesterday"
-            elif age_days < 7:
-                time_label = f"{age_days} days ago"
-            elif age_days < 30:
-                time_label = f"{age_days // 7} weeks ago"
-            else:
-                time_label = f"{age_days // 30} months ago"
-            
-            # Format: "Version 1 - 3 days ago (Feb 28)"
-            label = f"Version {i} - {time_label} ({date.strftime('%b %d')})"
-            models[label] = f"dinesh_ai_model.pth?revision={commit.commit_id}"
+        models = {}
+        for i, commit in enumerate(commits[:50]):
+            version = f"v0.{i}"
+            if i == len(commits[:50]) - 1:  # Latest
+                version += " (Latest)"
+            models[version] = {
+                "file": f"dinesh_ai_model.pth?revision={commit.commit_id}",
+                "date": commit.created_at.strftime("%Y-%m-%d %H:%M UTC"),
+                "commit": commit.commit_id[:8],
+                "message": commit.title
+            }
         
         return models
     except Exception as e:
         st.sidebar.error(f"Error: {e}")
-        return {"🆕 Latest (Now)": "dinesh_ai_model.pth"}
+        return {"v0.0": {"file": "dinesh_ai_model.pth", "date": "N/A", "commit": "N/A", "message": "N/A"}}
 
 @st.cache_resource
-def load_model(model_file: str):
+def load_model(model_info: dict):
     try:
         repo_id = os.environ.get('HF_REPO')
         if not repo_id:
             return None, None, None, None
+        
+        model_file = model_info["file"]
         
         # Extract revision if present
         revision = None
@@ -151,11 +142,28 @@ with st.sidebar:
     st.divider()
     
     # Model selector
-    st.subheader("🤖 Model")
+    st.subheader("🤖 Model Version")
     models = get_models()
-    selected = st.selectbox("Choose Version", list(models.keys()), 
-                           index=list(models.keys()).index(st.session_state.selected_model) if st.session_state.selected_model in models else 0,
-                           help="Newer versions are at the top")
+    versions = list(models.keys())
+    
+    # Default to latest
+    if not st.session_state.selected_model or st.session_state.selected_model not in versions:
+        st.session_state.selected_model = versions[-1] if versions else "v0.0"
+    
+    selected = st.selectbox(
+        "Select Version", 
+        versions,
+        index=versions.index(st.session_state.selected_model) if st.session_state.selected_model in versions else len(versions)-1
+    )
+    
+    # Show version details
+    if selected in models:
+        info = models[selected]
+        st.caption(f"📅 {info['date']}")
+        st.caption(f"🔖 Commit: {info['commit']}")
+        with st.expander("📝 Details"):
+            st.text(f"Message: {info['message']}")
+            st.text(f"Repository: {os.environ.get('HF_REPO', 'N/A')}")
     if selected != st.session_state.selected_model:
         st.session_state.selected_model = selected
         st.cache_resource.clear()
