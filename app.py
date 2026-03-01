@@ -63,30 +63,43 @@ st.markdown(theme, unsafe_allow_html=True)
 @st.cache_data(ttl=60)
 def get_models():
     try:
-        from huggingface_hub import list_repo_commits
+        from huggingface_hub import list_repo_commits, HfApi
         repo_id = os.environ.get('HF_REPO')
         if not repo_id:
-            return {"v0.0": "dinesh_ai_model.pth"}
+            return {"v0.0": {"file": "dinesh_ai_model.pth", "date": "N/A", "commit": "N/A", "message": "N/A", "size": "N/A", "filename": "N/A"}}
         
+        api = HfApi()
         commits = list(list_repo_commits(repo_id=repo_id))
         commits.reverse()  # Oldest first
+        
+        # Get file size
+        try:
+            repo_info = api.repo_info(repo_id=repo_id, files_metadata=True)
+            model_file_info = next((f for f in repo_info.siblings if f.rfilename == "dinesh_ai_model.pth"), None)
+            model_size_mb = model_file_info.size / (1024 * 1024) if model_file_info else 0
+        except:
+            model_size_mb = 0
         
         models = {}
         for i, commit in enumerate(commits[:50]):
             version = f"v0.{i}"
-            if i == len(commits[:50]) - 1:  # Latest
+            if i == len(commits[:50]) - 1:
                 version += " (Latest)"
             models[version] = {
                 "file": f"dinesh_ai_model.pth?revision={commit.commit_id}",
                 "date": commit.created_at.strftime("%Y-%m-%d %H:%M UTC"),
                 "commit": commit.commit_id[:8],
-                "message": commit.title
+                "message": commit.title,
+                "size": f"{model_size_mb:.1f} MB",
+                "filename": "dinesh_ai_model.pth"
             }
         
+        # Reverse to show latest first
+        models = dict(reversed(list(models.items())))
         return models
     except Exception as e:
         st.sidebar.error(f"Error: {e}")
-        return {"v0.0": {"file": "dinesh_ai_model.pth", "date": "N/A", "commit": "N/A", "message": "N/A"}}
+        return {"v0.0": {"file": "dinesh_ai_model.pth", "date": "N/A", "commit": "N/A", "message": "N/A", "size": "N/A", "filename": "N/A"}}
 
 @st.cache_resource
 def load_model(model_info: dict):
@@ -165,8 +178,10 @@ with st.sidebar:
     if selected in models and isinstance(models[selected], dict):
         info = models[selected]
         st.caption(f"📅 {info.get('date', 'N/A')}")
+        st.caption(f"📦 Size: {info.get('size', 'N/A')}")
         st.caption(f"🔖 Commit: {info.get('commit', 'N/A')}")
         with st.expander("📝 Details"):
+            st.text(f"Filename: {info.get('filename', 'N/A')}")
             st.text(f"Message: {info.get('message', 'N/A')}")
             st.text(f"Repository: {os.environ.get('HF_REPO', 'N/A')}")
     if selected != st.session_state.selected_model:
@@ -241,7 +256,8 @@ else:
         if msg['role'] == 'user':
             st.markdown(f'<div class="msg user">👤 **You:** {msg["content"]}</div>', unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="msg bot">✨ **Dinesh AI:** {msg["content"]}</div>', unsafe_allow_html=True)
+            version = msg.get('version', st.session_state.selected_model)
+            st.markdown(f'<div class="msg bot">✨ **Dinesh AI ({version}):** {msg["content"]}</div>', unsafe_allow_html=True)
 
 # Input
 st.divider()
@@ -268,9 +284,9 @@ if send and user_input and model:
                                           temperature=temperature, top_p=0.9, top_k=top_k, eos_token_id=2)
             
             text = tokenizer.decode(output_ids[0].cpu().tolist()).replace('Ġ', ' ').strip()
-            st.session_state.messages.append({"role": "assistant", "content": text})
+            st.session_state.messages.append({"role": "assistant", "content": text, "version": st.session_state.selected_model})
         except Exception as e:
-            st.session_state.messages.append({"role": "assistant", "content": f"Error: {str(e)}"})
+            st.session_state.messages.append({"role": "assistant", "content": f"Error: {str(e)}", "version": st.session_state.selected_model})
     st.rerun()
 
 # Footer
