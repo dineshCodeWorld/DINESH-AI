@@ -54,7 +54,11 @@ class TrainingPipeline:
                 )
                 logger.info(f"✓ W&B enabled: {self.wandb_run.url}")
             except Exception as e:
-                logger.warning(f"W&B init failed: {e}")
+                logger.error(f"W&B init failed: {e}")
+        elif WANDB_AVAILABLE:
+            logger.warning("W&B available but WANDB_API_KEY not set")
+        else:
+            logger.warning("W&B not installed (pip install wandb)")
         
         # Initialize TensorBoard writer
         self.writer = None
