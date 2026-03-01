@@ -93,18 +93,23 @@ class SimpleTokenizer:
             ])
             self.tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel()
             
-            # Train on data file
+            # CRITICAL FIX: Train on data file with proper settings
             trainer = trainers.BpeTrainer(
-                vocab_size=self.vocab_size,
-                min_frequency=1,  # Include all tokens (was 2)
+                vocab_size=self.vocab_size,  # MUST pass vocab_size to trainer!
+                min_frequency=2,  # Lower threshold for merges
                 show_progress=True,
-                special_tokens=["<pad>", "<unk>", "<eos>", "<bos>"]
+                special_tokens=["<pad>", "<unk>", "<eos>", "<bos>"],
+                initial_alphabet=pre_tokenizers.ByteLevel.alphabet()  # Start with byte-level alphabet
             )
             
             self.tokenizer.train([data_file], trainer=trainer)
             self.tokenizer.post_processor = processors.ByteLevel(trim_offsets=True)
             
-            logger.info("Tokenizer training completed")
+            actual_vocab = self.tokenizer.get_vocab_size()
+            logger.info(f"Tokenizer training completed: {actual_vocab} tokens learned")
+            
+            if actual_vocab < 1000:
+                logger.warning(f"⚠️ Tokenizer only learned {actual_vocab} tokens - data might be too small or min_frequency too high")
             
         except Exception as e:
             logger.error(f"Error training tokenizer: {str(e)}")

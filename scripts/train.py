@@ -75,7 +75,7 @@ class TrainingPipeline:
         self.deployer = ModelDeployer()
         self.pipeline_log = []
     
-    def run_full_pipeline(self, collect_limits: dict = None, deploy: bool = True):
+    def run_full_pipeline(self, collect_limits: dict = None, deploy: bool = True, skip_collection: bool = False):
         """Run the complete training pipeline"""
         
         pipeline_start = datetime.now()
@@ -84,51 +84,67 @@ class TrainingPipeline:
         logger.info("=" * 80)
         
         try:
-            # Step 1: Collect data (10% of total time)
-            logger.info("\n[STEP 1/5] Collecting data from sources... (Progress: 0%)")
-            if self.writer:
-                self.writer.add_text('Pipeline/Stage', 'Data Collection Started', 0)
-            
-            if collect_limits is None:
-                collect_limits = {
-                    "wikipedia": 1000,
-                    "arxiv": 500,
-                    "gutenberg": 100
-                }
-            
-            collected_file = self.data_collector.collect_all(collect_limits)
-            self.pipeline_log.append({
-                "step": "data_collection",
-                "status": "completed",
-                "file": collected_file,
-                "timestamp": datetime.now().isoformat()
-            })
-            elapsed = (datetime.now() - pipeline_start).total_seconds()
-            logger.info(f"✓ Data collection completed: {collected_file}")
-            logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s | Progress: 10%")
-            
-            if self.wandb_run:
-                wandb.log({"pipeline/progress": 10, "pipeline/stage": "data_collection"})
+            # Step 1: Collect data (10% of total time) - SKIPPABLE
+            if skip_collection:
+                logger.info("\n[STEP 1/5] Skipping data collection (using existing data)...")
+                logger.info("⏱️  Time saved: ~78 minutes | Progress: 10%")
+            else:
+                logger.info("\n[STEP 1/5] Collecting data from sources... (Progress: 0%)")
+                if self.writer:
+                    self.writer.add_text('Pipeline/Stage', 'Data Collection Started', 0)
+                
+                if collect_limits is None:
+                    collect_limits = {
+                        "wikipedia": 1000,
+                        "arxiv": 500,
+                        "gutenberg": 100
+                    }
+                
+                collected_file = self.data_collector.collect_all(collect_limits)
+                self.pipeline_log.append({
+                    "step": "data_collection",
+                    "status": "completed",
+                    "file": collected_file,
+                    "timestamp": datetime.now().isoformat()
+                })
+                elapsed = (datetime.now() - pipeline_start).total_seconds()
+                logger.info(f"✓ Data collection completed: {collected_file}")
+                logger.info(f"⏱️  Time elapsed: {elapsed:.1f}s | Progress: 10%")
+                
+                if self.wandb_run:
+                    wandb.log({"pipeline/progress": 10, "pipeline/stage": "data_collection"})
             
             # Step 2: Preprocess data (5% of total time)
-            logger.info("\n[STEP 2/5] Preprocessing collected data... (Progress: 10%)")
-            if self.writer:
-                self.writer.add_text('Pipeline/Stage', 'Data Preprocessing', 1)
-            
-            collected_data = self.preprocessor.load_collected_data(collected_file)
-            processed_data = self.preprocessor.preprocess_data(collected_data)
-            
-            existing_data_file = DATA_DIR / "all_training_data.json"
-            if existing_data_file.exists():
-                processed_data = self.preprocessor.merge_with_existing(
-                    processed_data, 
-                    str(existing_data_file)
+            if skip_collection:
+                logger.info("\n[STEP 2/5] Using existing preprocessed data... (Progress: 10%)")
+                # Check if existing data file exists
+                existing_data_file = DATA_DIR / "all_training_data.json"
+                if not existing_data_file.exists():
+                    logger.error("❌ No existing training data found! Cannot skip collection.")
+                    raise FileNotFoundError("all_training_data.json not found. Run with collection first.")
+                
+                with open(existing_data_file, 'r') as f:
+                    processed_data = json.load(f)
+                processed_file = str(existing_data_file)
+            else:
+                logger.info("\n[STEP 2/5] Preprocessing collected data... (Progress: 10%)")
+                if self.writer:
+                    self.writer.add_text('Pipeline/Stage', 'Data Preprocessing', 1)
+                
+                collected_data = self.preprocessor.load_collected_data(collected_file)
+                processed_data = self.preprocessor.preprocess_data(collected_data)
+                
+                existing_data_file = DATA_DIR / "all_training_data.json"
+                if existing_data_file.exists():
+                    processed_data = self.preprocessor.merge_with_existing(
+                        processed_data, 
+                        str(existing_data_file)
+                    )
+                
+                processed_file = self.preprocessor.save_processed_data(
+                    processed_data,
+                    "all_training_data.json"
                 )
-            
-            processed_file = self.preprocessor.save_processed_data(
-                processed_data,
-                "all_training_data.json"
-            )
             
             self.pipeline_log.append({
                 "step": "data_preprocessing",
@@ -341,6 +357,7 @@ def main():
     
     parser = argparse.ArgumentParser(description='Train Dinesh AI Model')
     parser.add_argument('--config', type=str, help='Config file to use (e.g., config.custom.yaml)')
+    parser.add_argument('--skip-collection', action='store_true', help='Skip data collection, use existing data')
     args = parser.parse_args()
     
     pipeline = TrainingPipeline()
@@ -348,6 +365,9 @@ def main():
     # Check which config is being used
     from src.config_loader import CONFIG_FILE, DATA_SOURCES
     logger.info(f"Using configuration: {CONFIG_FILE}")
+    
+    if args.skip_collection:
+        logger.info("⚠️  SKIP COLLECTION MODE: Using existing data")
     
     # Get collection limits from config
     collect_limits = {
@@ -363,7 +383,8 @@ def main():
     # Run pipeline with config limits
     pipeline.run_full_pipeline(
         collect_limits=collect_limits,
-        deploy=False
+        deploy=False,
+        skip_collection=args.skip_collection
     )
 
 if __name__ == "__main__":
