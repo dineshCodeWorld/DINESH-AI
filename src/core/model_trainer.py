@@ -187,16 +187,28 @@ class ModelTrainer:
             self.tokenizer = SimpleTokenizer(vocab_size=MODEL_CONFIG.get("vocab_size", 50000))
             self.tokenizer.train(data_file)
             
-            if self.writer:
-                self.writer.add_scalar('Tokenizer/VocabSize', self.tokenizer.vocab_size, 0)
+            # CRITICAL FIX: Always use config vocab_size, not tokenizer's actual size
+            actual_tokenizer_vocab = self.tokenizer.vocab_size
+            enforced_vocab_size = MODEL_CONFIG.get("vocab_size", 50000)
             
-            # Create model from scratch
+            logger.info(f"Tokenizer learned {actual_tokenizer_vocab} tokens from data")
+            logger.info(f"Model will be created with {enforced_vocab_size} vocab slots (from config)")
+            
+            if actual_tokenizer_vocab < enforced_vocab_size:
+                logger.warning(f"⚠️  Tokenizer vocab ({actual_tokenizer_vocab}) < Config vocab ({enforced_vocab_size})")
+                logger.warning(f"⚠️  Model will reserve {enforced_vocab_size - actual_tokenizer_vocab} empty slots for future growth")
+            
+            if self.writer:
+                self.writer.add_scalar('Tokenizer/ActualVocabSize', actual_tokenizer_vocab, 0)
+                self.writer.add_scalar('Tokenizer/EnforcedVocabSize', enforced_vocab_size, 0)
+            
+            # Create model from scratch with ENFORCED vocab size
             logger.info("Creating custom GPT model from scratch...")
             if self.writer:
                 self.writer.add_text('Training/Stage', 'Model Creation', 1)
             
             self.model = CustomGPT(
-                vocab_size=self.tokenizer.vocab_size,
+                vocab_size=enforced_vocab_size,  # ALWAYS use config, not tokenizer.vocab_size
                 d_model=MODEL_CONFIG.get("d_model", 768),
                 num_layers=MODEL_CONFIG.get("num_layers", 12),
                 num_heads=MODEL_CONFIG.get("num_heads", 12),
@@ -209,11 +221,13 @@ class ModelTrainer:
             
             param_count = self.model.count_parameters()
             logger.info(f"Model created with {param_count:,} parameters")
-            logger.info(f"Tokenizer vocab size: {self.tokenizer.vocab_size}")
+            logger.info(f"Model vocab size: {self.model.vocab_size} (enforced from config)")
+            logger.info(f"Tokenizer vocab size: {actual_tokenizer_vocab} (learned from data)")
             
             if self.writer:
                 self.writer.add_scalar('Model/Parameters', param_count, 0)
                 self.writer.add_scalar('Model/Layers', MODEL_CONFIG.get("num_layers", 12), 0)
+                self.writer.add_scalar('Model/VocabSize', enforced_vocab_size, 0)
             
         except Exception as e:
             logger.error(f"Error creating tokenizer and model: {str(e)}")

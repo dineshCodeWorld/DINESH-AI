@@ -244,11 +244,11 @@ class DataCollector:
             retries = 0
             
             while len(texts) < limit and page <= max_pages:
-                params = {"page": page}
+                params = {"page": page, "languages": "en"}
                 
                 time.sleep(rate_delay)
                 try:
-                    response = requests.get(api_url, params=params, timeout=self.timeout)
+                    response = requests.get(api_url, params=params, timeout=self.timeout * 2, headers={'User-Agent': self.user_agent})
                 except requests.exceptions.Timeout:
                     if retries < self.retry_attempts:
                         retries += 1
@@ -260,7 +260,7 @@ class DataCollector:
                         break
                 
                 if response.status_code == 200:
-                    retries = 0  # Reset on success
+                    retries = 0
                     data = response.json()
                     books = data.get("results", [])
                     
@@ -274,31 +274,30 @@ class DataCollector:
                         title = book.get("title", "Unknown")
                         authors = book.get('authors', [])
                         author_name = authors[0].get('name', 'Unknown') if authors else 'Unknown'
-                        
-                        # Get actual book text if available
-                        text_url = None
-                        for format_type, format_url in book.get('formats', {}).items():
-                            if 'text/plain' in format_type:
-                                text_url = format_url
-                                break
-                        
-                        # Create content from metadata and sample
-                        content = f"Title: {title}. Author: {author_name}. "
                         subjects = book.get('subjects', [])
-                        if subjects:
-                            content += f"Subjects: {', '.join(subjects[:3])}. "
                         
-                        if not self._is_duplicate(title):
+                        # Create rich content from metadata
+                        content = f"Book: {title} by {author_name}. "
+                        if subjects:
+                            content += f"Topics: {', '.join(subjects[:5])}. "
+                        
+                        # Add bookshelves info
+                        bookshelves = book.get('bookshelves', [])
+                        if bookshelves:
+                            content += f"Categories: {', '.join(bookshelves[:3])}. "
+                        
+                        if len(content) > 100 and not self._is_duplicate(title):
                             texts.append({
                                 "source": "gutenberg",
                                 "title": title,
-                                "content": content[:2000],
-                                "url": text_url or book.get("formats", {}).get("text/html", ""),
+                                "content": content[:3000],
+                                "url": f"https://www.gutenberg.org/ebooks/{book.get('id', '')}",
                                 "timestamp": datetime.now().isoformat()
                             })
                     
                     page += 1
                 else:
+                    logger.warning(f"Gutenberg API returned {response.status_code}")
                     break
             
             if self.writer:
@@ -322,7 +321,9 @@ class DataCollector:
         rate_delay = reddit_config.get('rate_limit_delay', 2.0)
         
         try:
-            headers = {'User-Agent': self.user_agent}
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
             
             for subreddit in subreddits:
                 if len(posts) >= limit:
@@ -332,7 +333,13 @@ class DataCollector:
                 url = f"https://www.reddit.com/r/{subreddit}/top.json?limit={posts_per_sub}&t=week"
                 
                 try:
-                    response = requests.get(url, headers=headers, timeout=self.timeout)
+                    response = requests.get(url, headers=headers, timeout=self.timeout * 2)
+                    
+                    if response.status_code == 429:
+                        logger.warning(f"Reddit rate limit, waiting 30 seconds...")
+                        time.sleep(30)
+                        response = requests.get(url, headers=headers, timeout=self.timeout * 2)
+                    
                     if response.status_code == 200:
                         data = response.json()
                         
@@ -344,9 +351,11 @@ class DataCollector:
                             title = post_data.get('title', '')
                             selftext = post_data.get('selftext', '')
                             
-                            content = f"{title}. {selftext}"
+                            content = f"{title}"
+                            if selftext and len(selftext) > 20:
+                                content += f". {selftext}"
                             
-                            if len(content) > 100 and not self._is_duplicate(content):
+                            if len(content) > 50 and not self._is_duplicate(content):
                                 posts.append({
                                     "source": "reddit",
                                     "title": title,
@@ -354,6 +363,11 @@ class DataCollector:
                                     "url": f"https://reddit.com{post_data.get('permalink', '')}",
                                     "timestamp": datetime.now().isoformat()
                                 })
+                        
+                        logger.info(f"Collected {len(posts)} from r/{subreddit}")
+                    else:
+                        logger.warning(f"Reddit r/{subreddit} returned {response.status_code}")
+                        
                 except Exception as e:
                     logger.warning(f"Error fetching r/{subreddit}: {e}")
                     continue
@@ -379,7 +393,7 @@ class DataCollector:
         try:
             response = requests.get('https://hacker-news.firebaseio.com/v0/topstories.json', timeout=self.timeout)
             if response.status_code == 200:
-                story_ids = response.json()[:limit * 2]  # Get extra in case some fail
+                story_ids = response.json()[:limit * 3]  # Get more since many won't have text
                 
                 for story_id in story_ids:
                     if len(stories) >= limit:
@@ -393,13 +407,24 @@ class DataCollector:
                     
                     if story_response.status_code == 200:
                         story = story_response.json()
+                        if not story:
+                            continue
+                            
                         title = story.get('title', '')
                         text = story.get('text', '')
                         url = story.get('url', '')
+                        by = story.get('by', '')
                         
-                        content = f"{title}. {text}"
+                        # Create content even without text field
+                        content = f"{title}"
+                        if text:
+                            # Clean HTML from text
+                            text = re.sub(r'<[^>]+>', '', text)
+                            content += f". {text}"
+                        if by:
+                            content += f" (by {by})"
                         
-                        if len(content) > 50 and not self._is_duplicate(content):
+                        if len(content) > 30 and not self._is_duplicate(content):
                             stories.append({
                                 "source": "hackernews",
                                 "title": title,
@@ -419,19 +444,22 @@ class DataCollector:
             return stories
     
     def collect_from_common_crawl(self, limit: int = 50) -> List[Dict]:
-        """Collect from Common Crawl News dataset"""
-        logger.info(f"Starting Common Crawl data collection (target: {limit})...")
+        """Collect from RSS News feeds"""
+        logger.info(f"Starting News RSS data collection (target: {limit})...")
         articles = []
         
         news_config = DATA_SOURCES.get('news', {})
         rate_delay = news_config.get('rate_limit_delay', 2.0)
         
         try:
-            headers = {'User-Agent': self.user_agent}
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
             
             rss_feeds = [
                 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
                 'https://feeds.bbci.co.uk/news/technology/rss.xml',
+                'https://www.theguardian.com/technology/rss',
             ]
             
             for feed_url in rss_feeds:
@@ -440,36 +468,60 @@ class DataCollector:
                 
                 time.sleep(rate_delay)
                 try:
-                    response = requests.get(feed_url, headers=headers, timeout=self.timeout)
+                    response = requests.get(feed_url, headers=headers, timeout=self.timeout * 2)
                     if response.status_code == 200:
                         root = ET.fromstring(response.content)
                         
-                        for item in root.findall('.//item'):
+                        # Try both RSS 2.0 and Atom formats
+                        items = root.findall('.//item')
+                        if not items:
+                            items = root.findall('.//{http://www.w3.org/2005/Atom}entry')
+                        
+                        for item in items:
                             if len(articles) >= limit:
                                 break
                             
+                            # RSS 2.0 format
                             title_elem = item.find('title')
                             desc_elem = item.find('description')
                             link_elem = item.find('link')
                             
-                            if title_elem is not None and desc_elem is not None:
+                            # Atom format fallback
+                            if title_elem is None:
+                                title_elem = item.find('{http://www.w3.org/2005/Atom}title')
+                            if desc_elem is None:
+                                desc_elem = item.find('{http://www.w3.org/2005/Atom}summary')
+                            if link_elem is None:
+                                link_elem = item.find('{http://www.w3.org/2005/Atom}link')
+                            
+                            if title_elem is not None:
                                 title = title_elem.text or ''
-                                desc = desc_elem.text or ''
+                                desc = desc_elem.text if desc_elem is not None else ''
                                 
                                 # Clean HTML tags
                                 desc = re.sub(r'<[^>]+>', '', desc)
-                                content = f"{title}. {desc}"
+                                content = f"{title}"
+                                if desc and len(desc) > 20:
+                                    content += f". {desc}"
                                 
-                                if len(content) > 100 and not self._is_duplicate(content):
+                                if len(content) > 50 and not self._is_duplicate(content):
+                                    link = ''
+                                    if link_elem is not None:
+                                        link = link_elem.text if hasattr(link_elem, 'text') else link_elem.get('href', '')
+                                    
                                     articles.append({
                                         "source": "news",
                                         "title": title,
                                         "content": content[:2000],
-                                        "url": link_elem.text if link_elem is not None else "",
+                                        "url": link,
                                         "timestamp": datetime.now().isoformat()
                                     })
+                        
+                        logger.info(f"Collected {len(articles)} from {feed_url.split('/')[2]}")
+                    else:
+                        logger.warning(f"Feed returned {response.status_code}: {feed_url}")
                 except Exception as e:
-                    logger.warning(f"Error fetching feed: {e}")
+                    logger.warning(f"Error fetching feed {feed_url}: {e}")
                     continue
             
             if self.writer:

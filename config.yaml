@@ -58,7 +58,7 @@ data:
   
   # BPE Tokenizer (Optimized)
   bpe_vocab_size: 32000        # Increased from 8000 (Gemini's recommendation)
-  bpe_min_frequency: 2         # Filter rare tokens
+  bpe_min_frequency: 1         # Lowered from 2 to capture more tokens
 
 # ==================== DATA SOURCES ====================
 data_sources:
@@ -71,7 +71,7 @@ data_sources:
   # Wikipedia Configuration
   wikipedia:
     enabled: true
-    limit: 500                 # Quality over quantity
+    limit: 5000                 # Quality over quantity
     batch_size: 20             # Articles per API request
     rate_limit_delay: 0.5      # Seconds between requests
     categories:
