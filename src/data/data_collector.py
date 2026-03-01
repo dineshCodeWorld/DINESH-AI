@@ -23,6 +23,12 @@ class DataCollector:
         self.collected_data = []
         self.seen_hashes_file = self.data_dir / "seen_content_hashes.json"
         self.seen_hashes = self._load_seen_hashes()
+        
+        # Load config values
+        self.user_agent = DATA_SOURCES.get('user_agent', 'DineshAI/1.0')
+        self.timeout = DATA_SOURCES.get('request_timeout', 15)
+        self.retry_attempts = DATA_SOURCES.get('retry_attempts', 3)
+        self.rate_limit_delay = DATA_SOURCES.get('rate_limit_delay', 1.0)
     
     def _load_seen_hashes(self) -> set:
         """Load previously seen content hashes to avoid duplicates"""
@@ -56,29 +62,29 @@ class DataCollector:
         logger.info(f"Starting Wikipedia data collection (target: {limit})...")
         articles = []
         
-        # Add User-Agent header to avoid 403 errors
-        headers = {
-            'User-Agent': 'DineshAI/1.0 (Educational Project; Python/requests)'
-        }
+        wiki_config = DATA_SOURCES.get('wikipedia', {})
+        batch_size = wiki_config.get('batch_size', 20)
+        rate_delay = wiki_config.get('rate_limit_delay', 0.5)
+        
+        headers = {'User-Agent': self.user_agent}
         
         try:
             url = "https://en.wikipedia.org/w/api.php"
             
-            # Keep collecting until we reach the limit
             while len(articles) < limit:
                 remaining = limit - len(articles)
-                batch_size = min(remaining, 20)  # API limit per request
+                current_batch = min(remaining, batch_size)
                 
                 params = {
                     "action": "query",
                     "format": "json",
                     "list": "random",
                     "rnnamespace": "0",
-                    "rnlimit": batch_size
+                    "rnlimit": current_batch
                 }
                 
-                time.sleep(0.5)  # Rate limit protection
-                response = requests.get(url, params=params, headers=headers, timeout=15)
+                time.sleep(rate_delay)
+                response = requests.get(url, params=params, headers=headers, timeout=self.timeout)
                 if response.status_code == 429:
                     logger.warning("Wikipedia rate limit hit, waiting 10 seconds...")
                     time.sleep(10)
@@ -100,8 +106,8 @@ class DataCollector:
                             "prop": "extracts",
                             "explaintext": True
                         }
-                        time.sleep(0.3)  # Rate limit protection
-                        content_response = requests.get(url, params=content_params, headers=headers, timeout=15)
+                        time.sleep(rate_delay * 0.6)
+                        content_response = requests.get(url, params=content_params, headers=headers, timeout=self.timeout)
                         if content_response.status_code == 429:
                             logger.warning("Wikipedia rate limit on content, waiting 5 seconds...")
                             time.sleep(5)
@@ -137,35 +143,37 @@ class DataCollector:
         logger.info(f"Starting ArXiv data collection (target: {limit})...")
         papers = []
         
+        arxiv_config = DATA_SOURCES.get('arxiv', {})
+        categories = arxiv_config.get('categories', ["cs.AI", "cs.LG"])
+        max_results = arxiv_config.get('max_results_per_request', 100)
+        rate_delay = arxiv_config.get('rate_limit_delay', 1.0)
+        
         try:
             base_url = "http://export.arxiv.org/api/query?"
-            categories = ["cs.AI", "cs.LG", "cs.CL", "cs.CV", "physics.gen-ph", "math.CO"]
-            
             per_category = limit // len(categories) + 1
             
             for category in categories:
                 if len(papers) >= limit:
                     break
                     
-                # Use random start position
                 random_start = random.randint(0, 1000)
                 query = f"cat:{category}"
                 params = {
                     "search_query": query,
                     "start": random_start,
-                    "max_results": min(per_category, 100),  # Increased from 10
+                    "max_results": min(per_category, max_results),
                     "sortBy": "submittedDate",
                     "sortOrder": "descending"
                 }
                 
-                time.sleep(1)  # ArXiv rate limit (1 req/sec)
+                time.sleep(rate_delay)
                 try:
-                    response = requests.get(base_url, params=params, timeout=20)
+                    response = requests.get(base_url, params=params, timeout=self.timeout * 1.5)
                 except requests.exceptions.Timeout:
                     logger.warning(f"ArXiv timeout for {category}, retrying...")
                     time.sleep(3)
                     try:
-                        response = requests.get(base_url, params=params, timeout=30)
+                        response = requests.get(base_url, params=params, timeout=self.timeout * 2)
                     except:
                         logger.error(f"ArXiv failed for {category} after retry")
                         continue
@@ -207,24 +215,25 @@ class DataCollector:
         logger.info(f"Starting Project Gutenberg data collection (target: {limit})...")
         texts = []
         
+        gutenberg_config = DATA_SOURCES.get('gutenberg', {})
+        api_url = gutenberg_config.get('api_url', 'https://gutendex.com/books')
+        max_pages = gutenberg_config.get('max_pages', 10)
+        rate_delay = gutenberg_config.get('rate_limit_delay', 1.0)
+        
         try:
-            url = "https://gutendex.com/books"
-            
-            # Collect from multiple pages until we reach limit
             page = 1
             retries = 0
-            max_retries = 3
             
-            while len(texts) < limit and page <= 10:  # Max 10 pages
+            while len(texts) < limit and page <= max_pages:
                 params = {"page": page}
                 
-                time.sleep(1)  # Rate limit protection
+                time.sleep(rate_delay)
                 try:
-                    response = requests.get(url, params=params, timeout=20)
+                    response = requests.get(api_url, params=params, timeout=self.timeout)
                 except requests.exceptions.Timeout:
-                    if retries < max_retries:
+                    if retries < self.retry_attempts:
                         retries += 1
-                        logger.warning(f"Gutenberg timeout, retry {retries}/{max_retries}...")
+                        logger.warning(f"Gutenberg timeout, retry {retries}/{self.retry_attempts}...")
                         time.sleep(5)
                         continue
                     else:
@@ -285,19 +294,23 @@ class DataCollector:
         logger.info(f"Starting Reddit data collection (target: {limit})...")
         posts = []
         
+        reddit_config = DATA_SOURCES.get('reddit', {})
+        subreddits = reddit_config.get('subreddits', ['AskReddit'])
+        posts_per_sub = reddit_config.get('posts_per_subreddit', 20)
+        rate_delay = reddit_config.get('rate_limit_delay', 2.0)
+        
         try:
-            subreddits = ['AskReddit', 'explainlikeimfive', 'todayilearned', 'science', 'technology']
-            headers = {'User-Agent': 'DineshAI/1.0'}
+            headers = {'User-Agent': self.user_agent}
             
             for subreddit in subreddits:
                 if len(posts) >= limit:
                     break
                 
-                time.sleep(2)
-                url = f"https://www.reddit.com/r/{subreddit}/top.json?limit=20&t=week"
+                time.sleep(rate_delay)
+                url = f"https://www.reddit.com/r/{subreddit}/top.json?limit={posts_per_sub}&t=week"
                 
                 try:
-                    response = requests.get(url, headers=headers, timeout=15)
+                    response = requests.get(url, headers=headers, timeout=self.timeout)
                     if response.status_code == 200:
                         data = response.json()
                         
@@ -335,9 +348,11 @@ class DataCollector:
         logger.info(f"Starting HackerNews data collection (target: {limit})...")
         stories = []
         
+        hn_config = DATA_SOURCES.get('hackernews', {})
+        rate_delay = hn_config.get('rate_limit_delay', 0.5)
+        
         try:
-            # Get top stories
-            response = requests.get('https://hacker-news.firebaseio.com/v0/topstories.json', timeout=10)
+            response = requests.get('https://hacker-news.firebaseio.com/v0/topstories.json', timeout=self.timeout)
             if response.status_code == 200:
                 story_ids = response.json()[:limit * 2]  # Get extra in case some fail
                 
@@ -345,10 +360,10 @@ class DataCollector:
                     if len(stories) >= limit:
                         break
                     
-                    time.sleep(0.5)
+                    time.sleep(rate_delay)
                     story_response = requests.get(
                         f'https://hacker-news.firebaseio.com/v0/item/{story_id}.json',
-                        timeout=10
+                        timeout=self.timeout
                     )
                     
                     if story_response.status_code == 200:
@@ -380,12 +395,12 @@ class DataCollector:
         logger.info(f"Starting Common Crawl data collection (target: {limit})...")
         articles = []
         
+        news_config = DATA_SOURCES.get('news', {})
+        rate_delay = news_config.get('rate_limit_delay', 2.0)
+        
         try:
-            # Use Common Crawl News API
-            url = "https://data.commoncrawl.org/crawl-data/CC-NEWS/index.html"
-            headers = {'User-Agent': 'DineshAI/1.0'}
+            headers = {'User-Agent': self.user_agent}
             
-            # For simplicity, collect from news sites via RSS
             rss_feeds = [
                 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
                 'https://feeds.bbci.co.uk/news/technology/rss.xml',
@@ -395,9 +410,9 @@ class DataCollector:
                 if len(articles) >= limit:
                     break
                 
-                time.sleep(2)
+                time.sleep(rate_delay)
                 try:
-                    response = requests.get(feed_url, headers=headers, timeout=15)
+                    response = requests.get(feed_url, headers=headers, timeout=self.timeout)
                     if response.status_code == 200:
                         root = ET.fromstring(response.content)
                         

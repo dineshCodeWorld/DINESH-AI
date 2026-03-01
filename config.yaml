@@ -4,19 +4,20 @@
 # ==================== MODEL CONFIGURATION ====================
 model:
   # Model Architecture (Optimized for quality)
-  vocab_size: 8000             # Larger vocab for better word coverage
+  vocab_size: 32000            # Increased from 8000 (Gemini's recommendation)
   d_model: 512                 # Increased from 256 for better representations
   num_layers: 6                # Increased from 4 for deeper learning
   num_heads: 8                 # Matches d_model (512/64=8)
   d_ff: 2048                   # 4x d_model for better feature extraction
-  max_length: 256              # Longer context for better understanding
+  max_length: 512              # Increased from 256 for longer context
   dropout: 0.1                 # Dropout rate
   
-  # Generation Parameters
-  temperature: 0.7             # Sampling temperature (0.1-2.0)
+  # Generation Parameters (for human-like responses)
+  temperature: 0.8             # Higher = more creative/human-like (0.7-0.9 recommended)
   top_k: 50                    # Top-k sampling
-  top_p: 0.9                   # Nucleus (top-p) sampling
-  max_new_tokens: 100          # Maximum tokens to generate
+  top_p: 0.92                  # Nucleus sampling (higher = more diverse)
+  max_new_tokens: 150          # Maximum tokens to generate
+  repetition_penalty: 1.2      # Prevent repetitive responses
 
 # ==================== TRAINING CONFIGURATION ====================
 training:
@@ -33,8 +34,9 @@ training:
   gradient_clip: 1.0           # Gradient clipping value
   
   # Device and precision
-  device: "cpu"                # Device: cuda, cpu (auto-detects GPU if available)
-  mixed_precision: false       # Enable mixed precision training (requires GPU)
+  device: "cuda"               # Device: cuda, cpu (auto-detects GPU if available)
+  mixed_precision: true        # Enable mixed precision training (requires GPU)
+  fallback_to_cpu: true        # Fallback to CPU if GPU not available
   
   # Checkpointing
   save_interval: 100           # Save checkpoint every N batches
@@ -55,15 +57,23 @@ data:
   shuffle: true                # Shuffle data
   
   # BPE Tokenizer (Optimized)
-  bpe_vocab_size: 8000         # Larger vocabulary
+  bpe_vocab_size: 32000        # Increased from 8000 (Gemini's recommendation)
   bpe_min_frequency: 2         # Filter rare tokens
 
 # ==================== DATA SOURCES ====================
 data_sources:
+  # API Configuration
+  user_agent: "DineshAI/1.0 (Educational Project; Python/requests)"
+  request_timeout: 15          # Seconds
+  retry_attempts: 3            # Number of retries on failure
+  rate_limit_delay: 1.0        # Seconds between requests
+  
   # Wikipedia Configuration
   wikipedia:
     enabled: true
     limit: 500                 # Quality over quantity
+    batch_size: 20             # Articles per API request
+    rate_limit_delay: 0.5      # Seconds between requests
     categories:
       - Technology
       - Science
@@ -78,7 +88,9 @@ data_sources:
   arxiv:
     enabled: true
     limit: 300                 # Research papers
+    max_results_per_request: 100  # API limit per request
     sort_by: "submittedDate"   # Sort by: submittedDate, relevance
+    rate_limit_delay: 1.0      # ArXiv requires 1 req/sec
     categories:
       - cs.AI                  # Artificial Intelligence
       - cs.LG                  # Machine Learning
@@ -91,12 +103,17 @@ data_sources:
     enabled: true
     limit: 200                 # Increased: novels have dialogues
     mirror: "https://www.gutenberg.org"  # Gutenberg mirror
+    api_url: "https://gutendex.com/books"
+    max_pages: 10              # Maximum pages to fetch
+    rate_limit_delay: 1.0      # Seconds between requests
     # Note: Fiction books contain natural conversations and dialogues
   
   # Reddit Configuration
   reddit:
     enabled: true
     limit: 100                 # Reddit posts and discussions
+    posts_per_subreddit: 20    # Posts to fetch per subreddit
+    rate_limit_delay: 2.0      # Seconds between requests
     subreddits:
       - AskReddit
       - explainlikeimfive
@@ -108,11 +125,13 @@ data_sources:
   hackernews:
     enabled: true
     limit: 50                  # Top HN stories
+    rate_limit_delay: 0.5      # Seconds between requests
   
   # News RSS Feeds
   news:
     enabled: true
     limit: 50                  # News articles from RSS feeds
+    rate_limit_delay: 2.0      # Seconds between feeds
 
 # ==================== CONTINUOUS LEARNING ====================
 continuous:
@@ -177,8 +196,35 @@ logging:
   console_output: true         # Print to console
   
   # Specific loggers
-  tensorboard: false           # Enable TensorBoard logging
+  tensorboard: true            # Enable TensorBoard logging
   wandb: false                 # Enable Weights & Biases logging
+
+# ==================== METRICS TRACKING ====================
+metrics:
+  # Model Quality Metrics
+  track_perplexity: true       # Track perplexity (model confusion)
+  track_bleu: true             # Track BLEU score (n-gram overlap)
+  track_vocab_match: true      # Track % of real English words
+  
+  # Evaluation Settings
+  eval_every_n_steps: 100      # Evaluate metrics every N steps
+  save_best_model: true        # Save model when metrics improve
+  
+  # Visualization
+  tensorboard_dir: "runs"      # TensorBoard log directory
+  save_sample_outputs: true    # Save sample generations each epoch
+  samples_per_eval: 5          # Number of samples to generate
+  
+  # Test Prompts (for consistency tracking)
+  test_prompts:
+    - "hi"
+    - "What is AI?"
+    - "Tell me about science"
+    - "How does technology work?"
+  
+  # Dictionary for vocab matching
+  use_english_dict: true       # Use English dictionary for vocab matching
+  min_word_length: 2           # Minimum word length to count
 
 # ==================== PATHS CONFIGURATION ====================
 paths:
@@ -210,6 +256,53 @@ system:
   # Performance
   use_compiled_model: false    # Use torch.compile for faster training
   cache_data: true             # Cache processed data in memory
+
+# ==================== APP CONFIGURATION ====================
+app:
+  # Streamlit UI Settings
+  page_title: "Dinesh AI"
+  page_icon: "✨"
+  layout: "wide"
+  
+  # Model Cache
+  model_cache_ttl: 60          # Seconds to cache model list
+  
+  # Theme Colors (Dark Mode)
+  dark_theme:
+    background: "#0e1117"
+    text: "#e0e0e0"
+    accent: "#667eea"
+    user_msg_bg: "#1e3a5f"
+    bot_msg_bg: "#1e1e1e"
+    input_bg: "#1e1e1e"
+    border: "#333"
+  
+  # Theme Colors (Light Mode)
+  light_theme:
+    background: "#ffffff"
+    text: "#1a1a1a"
+    accent: "#667eea"
+    user_msg_bg: "#e3f2fd"
+    bot_msg_bg: "#f5f5f5"
+    input_bg: "#ffffff"
+    border: "#ddd"
+  
+  # Generation Defaults (UI)
+  default_temperature: 0.8
+  default_top_k: 50
+  default_max_length: 150
+  
+  # Example Prompts
+  example_prompts:
+    - icon: "🤖"
+      title: "What is AI?"
+      prompt: "What is artificial intelligence?"
+    - icon: "🌍"
+      title: "Science"
+      prompt: "Tell me about quantum physics"
+    - icon: "💻"
+      title: "Technology"
+      prompt: "How does blockchain work?"
 
 # ==================== NOTES ====================
 # Configuration Priority (highest to lowest):

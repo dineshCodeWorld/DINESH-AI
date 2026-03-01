@@ -6,8 +6,10 @@
 - ✅ Deploys new version every Sunday
 - ✅ Sends email to dineshganji372@gmail.com after deployment
 - ✅ Free Streamlit Cloud hosting with public URL
-- ✅ Collects data from Wikipedia, ArXiv, Gutenberg
+- ✅ Collects data from Wikipedia, ArXiv, Gutenberg, Reddit, HackerNews, News
 - ✅ Free model storage (Hugging Face)
+- ✅ Centralized configuration (config.yaml)
+- ✅ Optimized for human-like responses
 - ✅ $0/month cost
 
 ## 🚀 Quick Setup
@@ -154,9 +156,21 @@ You'll receive emails with:
 
 ## 📚 Documentation
 
+- `PROJECT_SUMMARY.md` - Complete project overview and architecture
 - `SETUP_CHECKLIST.md` - Step-by-step setup guide
-- `REALISTIC_GPU_OPTIONS.md` - GPU training options (free & paid)
-- `docs/` - Complete documentation
+- `config.yaml` - Central configuration file (all settings)
+- `docs/` - Detailed documentation (13 guides)
+
+## ⚙️ Configuration
+
+All settings are in `config.yaml`:
+- Model parameters (vocab_size, layers, temperature, etc.)
+- Data source limits and rate limits
+- Training hyperparameters
+- App UI settings (themes, prompts)
+- System configuration
+
+**No hardcoded values** - everything is configurable!
 
 ## 🔗 Important Links
 
@@ -164,6 +178,7 @@ You'll receive emails with:
 - GitHub Secrets: https://github.com/yourusername/Dinesh-AI/settings/secrets/actions
 - Gmail App Passwords: https://myaccount.google.com/apppasswords
 - Streamlit Cloud: https://share.streamlit.io
+- Project Summary: See `PROJECT_SUMMARY.md`
 
 ---
 

@@ -131,3 +131,18 @@ SYSTEM_CONFIG = {
     "seed": system_cfg.get("seed", 42),
     "deterministic": system_cfg.get("deterministic", True),
 }
+
+# ==================== APP CONFIGURATION ====================
+app_cfg = CONFIG.get('app', {})
+APP_CONFIG = {
+    "page_title": app_cfg.get("page_title", "Dinesh AI"),
+    "page_icon": app_cfg.get("page_icon", "✨"),
+    "layout": app_cfg.get("layout", "wide"),
+    "model_cache_ttl": app_cfg.get("model_cache_ttl", 60),
+    "dark_theme": app_cfg.get("dark_theme", {}),
+    "light_theme": app_cfg.get("light_theme", {}),
+    "default_temperature": app_cfg.get("default_temperature", 0.8),
+    "default_top_k": app_cfg.get("default_top_k", 50),
+    "default_max_length": app_cfg.get("default_max_length", 150),
+    "example_prompts": app_cfg.get("example_prompts", []),
+}
